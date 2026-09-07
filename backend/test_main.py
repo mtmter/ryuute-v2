@@ -50,6 +50,56 @@ class HealthApiTest(unittest.TestCase):
         )
 
 
+class CorsOriginsTest(unittest.TestCase):
+    def test_uses_localhost_origins_by_default(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(
+                main.get_cors_origins(),
+                [
+                    "http://localhost:5173",
+                    "http://127.0.0.1:5173",
+                ],
+            )
+
+    def test_reads_multiple_origins_and_ignores_empty_values(self):
+        with patch.dict(
+            os.environ,
+            {
+                "CORS_ORIGINS": (
+                    " https://ryuute-v2-frontend.vercel.app, "
+                    ",https://preview.example.com "
+                ),
+            },
+            clear=True,
+        ):
+            self.assertEqual(
+                main.get_cors_origins(),
+                [
+                    "https://ryuute-v2-frontend.vercel.app",
+                    "https://preview.example.com",
+                ],
+            )
+
+    def test_allows_wildcard_only_when_explicitly_configured(self):
+        with patch.dict(
+            os.environ,
+            {"CORS_ORIGINS": "*"},
+            clear=True,
+        ):
+            self.assertEqual(main.get_cors_origins(), ["*"])
+
+    def test_uses_localhost_origins_when_config_is_empty(self):
+        with patch.dict(
+            os.environ,
+            {"CORS_ORIGINS": " , "},
+            clear=True,
+        ):
+            self.assertEqual(
+                main.get_cors_origins(),
+                main.DEFAULT_CORS_ORIGINS,
+            )
+
+
 class RouteSearchApiTest(unittest.TestCase):
     def test_route_search_works_without_database(self):
         with patch.dict(

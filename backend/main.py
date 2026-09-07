@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timedelta
 
 from fastapi import FastAPI, HTTPException
@@ -12,11 +13,27 @@ from routes_service import (
 )
 
 
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+
+def get_cors_origins():
+    cors_origins_text = os.getenv("CORS_ORIGINS", "")
+    cors_origins = [
+        origin.strip()
+        for origin in cors_origins_text.split(",")
+        if origin.strip()
+    ]
+    return cors_origins or DEFAULT_CORS_ORIGINS
+
+
 app = FastAPI(title="Ryuute")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=get_cors_origins(),
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
