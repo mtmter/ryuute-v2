@@ -903,6 +903,50 @@ VITE_BACKEND_API_BASE_URL=http://localhost:8000/api
 
 ローカル開発用の値は `frontend/.env.local` に設定します。`VITE_BACKEND_API_BASE_URL` は経路検索時だけ使用し、FirestoreのCRUDでは使用しません。
 
+## Vercelへのデプロイ
+
+同じGitHubリポジトリから、フロントエンドとバックエンドを別々のVercel Projectとしてデプロイします。
+
+| Project名の例 | Root Directory | 用途 |
+| --- | --- | --- |
+| `ryuute-v2-backend` | `backend` | FastAPIによる経路検索API |
+| `ryuute-v2-frontend` | `frontend` | Reactアプリの配信 |
+
+### 1. バックエンドをデプロイする
+
+VercelでこのリポジトリをImportし、Root Directoryを `backend` に設定します。`backend/main.py` の `app` がFastAPIアプリとして自動検出されるため、追加のエントリポイントやASGIアダプターは不要です。
+
+Production環境変数を設定します。
+
+```text
+ROUTE_PROVIDER=mock
+CORS_ORIGINS=https://<frontend-domain>
+```
+
+デモではMock Providerを使用するため、`EKISPERT_API_KEY` は不要です。デプロイ後、次のURLが `{"status":"ok"}` を返すことを確認します。
+
+```text
+https://<backend-domain>/api/health
+```
+
+### 2. フロントエンドをデプロイする
+
+同じリポジトリをもう一度Importし、Root Directoryを `frontend` に設定します。Production環境変数には、`frontend/.env.example` にあるFirebaseとGoogle Mapsの設定に加えて、デプロイ済みバックエンドのURLを設定します。
+
+```text
+VITE_BACKEND_API_BASE_URL=https://<backend-domain>/api
+```
+
+URLの末尾は `/api` とし、その後ろに `/` は付けません。Vercelの環境変数を変更した場合は、新しい値を反映するため再デプロイします。
+
+### 3. 外部サービスで本番ドメインを許可する
+
+- Firebase AuthenticationのAuthorized domainsへフロントエンドのVercelドメインを追加する
+- Google Maps Platformのブラウザ用APIキーで、フロントエンドのVercelドメインをHTTPリファラの許可対象へ追加する
+- バックエンドの `CORS_ORIGINS` が実際のフロントエンドURLと一致していることを確認する
+
+APIキーなどの実値はVercelのEnvironment Variablesで管理し、Gitへpushしません。
+
 ---
 
 # 24. 起動方法
