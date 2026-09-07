@@ -22,3 +22,6 @@ backend/.env
 
 # Firebase CLI
 firebase-debug.log*
+
+# Vercel CLI
+.vercel/
