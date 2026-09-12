@@ -1,67 +1,72 @@
 # Route Providers
 
-この文書は、現在実装されている経路Providerと変換処理の保守情報をまとめます。利用者に見えるAPI契約は `openspec/specs/places-and-route-search/spec.md` を参照してください。
+Provider固有のHTTP処理と変換は `backend/route_providers/` に置き、すべて
+`RouteRequest -> RouteResult` の共通契約を返します。Providerの生レスポンスは
+FastAPI、フロントエンド、Firestoreへ渡しません。
 
 ## Providerの選択
 
-`ROUTE_PROVIDER` で次のProviderを選択します。
+`ROUTE_PROVIDER_MODE` は次の値を受け付け、未設定時は `auto` です。移行中は旧
+`ROUTE_PROVIDER` も読みますが、新規設定では使用しません。
 
 | 値 | 動作 |
 | --- | --- |
-| `mock` | ローカルfixtureを読み込む。未設定時の既定値 |
-| `ekispert` | 駅すぱあとAPIへ接続する |
+| `auto` | 座標と失敗分類に応じてProviderを切り替える |
+| `transit` | Transitousの公共交通だけを検索する |
+| `google` | Google Routesの公共交通だけを検索する |
+| `ekispert` | 駅すぱあとだけを検索する |
+| `mock` | 外部通信なしの固定共通Routeを返す |
 
-対応していない値はProvider設定エラーになります。
+`auto` は両端が日本の座標範囲内ならTransitous、Google徒歩の順、それ以外または
+座標不足ならGoogle公共交通、Google徒歩の順です。駅すぱあとは自動選択しません。
+fallbackするのは対象外・経路なし・timeout・rate limit・server errorです。
+Transitousのtimeout、429、5xxは1回だけ再試行します。
 
-```text
-Provider
-  -> 駅すぱあと形式JSON
-  -> convert_ekispert_route()
-  -> アプリ共通Route JSON
+## Transitous
+
+`TRANSIT_API_URL`（既定 `https://api.transitous.org/api/v1/plan`）を7秒timeoutで
+呼び出します。`fromPlace`、`toPlace`、ISO 8601の `time`、`arriveBy`、
+`detailedTransfers=false`、`numItineraries=1` を送ります。
+
+公開サービスの利用方針に従い、連絡先を含む `TRANSIT_USER_AGENT` を本番環境で
+必ず設定してください。レスポンスのISO日時に加え、`serviceDate` と0時からの秒数
+で表された時刻も変換します。86400以上の値は翌日以降として扱います。秒数形式の
+timezoneは `TRANSIT_TIMEZONE`（既定 `Asia/Tokyo`）です。
+
+Transitousはbest-effortの非公式情報であるため、結果と保存済み移動ブロックへ注意文を
+付けます。重要な移動は交通事業者の案内でも確認してください。
+
+## Google Routes
+
+`GOOGLE_MAPS_API_KEY` をサーバー側に設定します。TRANSITとWALKを登録済みProvider
+として利用し、到着検索は `arrivalTime`、出発検索は `departureTime` を送ります。
+ブラウザ用の `VITE_GOOGLE_MAPS_API_KEY` とは用途と制限を分けてください。
+
+## 駅すぱあと
+
+明示的に `ekispert` を指定した場合だけ利用します。`EKISPERT_API_KEY` が必要です。
+`GET https://api.ekispert.jp/v1/json/search/course/extreme` の応答変換はProvider内で
+行い、単体オブジェクト／配列の差を正規化します。
+
+## エラーと共通レスポンス
+
+Provider失敗は `invalid_input`、`unavailable`、`not_configured`、`no_route`、
+`transient`、`invalid_response` に分類します。経路なしはHTTP 404、明示Providerの
+キー不足はHTTP 500、未知のmode・通信・変換失敗はHTTP 502へ変換します。
+
+共通Routeには `provider`、`route_kind`、`is_fallback`、`notices` と共通segmentが
+必須です。保存済み旧データにこれらがない場合、フロントエンドは `legacy` と
+移動手段から導く既定値を非破壊で適用します。
+
+## テストと任意smoke
+
+通常のunit testは全HTTP呼び出しをmockし、外部ネットワークを必要としません。
+実接続は明示的に次を実行します。
+
+```bash
+cd backend
+RUN_LIVE_ROUTE_SMOKE=1 ROUTE_PROVIDER_MODE=transit \
+  .venv/bin/python smoke_route_providers.py
 ```
 
-Mockと駅すぱあと実接続は、同じconverterを使用します。
-
-## Ekispert Provider
-
-`GET https://api.ekispert.jp/v1/json/search/course/extreme` を10秒のタイムアウトで呼び出します。現在のqueryは次のとおりです。
-
-```text
-key=<EKISPERT_API_KEY>
-viaList=<origin>:<destination>
-gcs=wgs84
-date=YYYYMMDD
-time=HHMM
-searchType=arrival|departure
-answerCount=1
-sort=ekispert
-```
-
-`viaList` の区切り文字 `:` はURLエンコードせずに送信します。検索日時は日本標準時へ変換して `date` と `time` に分け、行きは到着検索、帰りは出発検索を使用します。
-
-APIキーがない場合、タイムアウト、接続失敗、HTTPエラー、JSON以外のレスポンスはProviderエラーとして扱います。
-
-## Mock Provider
-
-Mock Providerは `backend/fixtures/ekispert_route_demo.json` を読み込みます。到着検索のfixture基準日時は、コード上で次に固定されています。
-
-```text
-2026-08-25T10:12:00+09:00
-```
-
-到着検索では基準到着希望日時、出発検索ではfixtureの先頭出発日時との差を求め、fixture内にあるすべての `Datetime.text` へ同じ差分を加えます。この処理は区間時間と待ち時間を保ったまま表示日時を移動するものであり、指定日時における実際の運行便を再探索するものではありません。
-
-fixtureを置き換える場合は、`mock_provider.py` の `FIXTURE_DESIRED_ARRIVAL_AT` も新しいfixtureの基準条件に合わせる必要があります。
-
-## Converter
-
-converterは最初のCourseを使用し、PointとLineの数が `Point = Line + 1` であることを要求します。駅すぱあとJSONの単一オブジェクトと配列の差は内部でリストへ正規化します。
-
-各Lineは次のように変換します。
-
-- `Type` が大文字・小文字を問わず `walk`、または `Name` が `徒歩`: `WALK`
-- それ以外: `TRANSIT`。路線名が必須
-- 発着日時: 日本標準時の `YYYY-MM-DDTHH:mm`
-- 所要時間: 発着日時の差を分単位へ切り上げ
-
-Courseがない場合は経路なし、それ以外の不足・不整合はレスポンス変換エラーになります。
+Googleまたは駅すぱあとでは、対応するAPIキーも環境変数に設定します。

@@ -90,15 +90,19 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-既定の設定はMock Providerです。
+未設定時の実行modeは `auto` です。ローカルで外部通信を行わない例ではMockを指定します。
 
 ```text
 EKISPERT_API_KEY=
-ROUTE_PROVIDER=mock
+GOOGLE_MAPS_API_KEY=
+ROUTE_PROVIDER_MODE=mock
+TRANSIT_API_URL=https://api.transitous.org/api/v1/plan
+TRANSIT_USER_AGENT=PlanRail/1.0 (contact@example.com)
+TRANSIT_TIMEZONE=Asia/Tokyo
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 ```
 
-`ROUTE_PROVIDER` は `mock` または `ekispert` を指定できます。`ekispert` の場合だけ `EKISPERT_API_KEY` が必要です。`CORS_ORIGINS` はカンマ区切りで複数指定できます。
+`ROUTE_PROVIDER_MODE` は `auto`、`transit`、`google`、`ekispert`、`mock` を指定できます。自動fallbackと各Providerの設定は[経路Provider資料](docs/route-providers.md)を参照してください。`CORS_ORIGINS` はカンマ区切りで複数指定できます。
 
 秘密情報を含む `.env` と `.env.local` はコミットしないでください。
 

@@ -37,7 +37,7 @@ ROUTE_PROVIDER
 CORS_ORIGINS
 ```
 
-Productionには `EKISPERT_API_KEY` が登録されていません。公開経路検索が成功し、Mock fixtureと同じ構造・所要時間の結果を返すことから、現在の本番経路検索はMock Providerで動作していると判断できます。
+この一覧は変更前のProduction設定です。`ROUTE_PROVIDER` は移行互換として読み込まれますが、新規デプロイでは下記の `ROUTE_PROVIDER_MODE` を使用します。Productionには `EKISPERT_API_KEY` が登録されていません。公開経路検索が成功し、旧Mockと同じ構造・所要時間の結果を返すことから、確認時点の本番経路検索はMock Providerで動作していると判断できます。
 
 公開環境では次を確認済みです。
 
@@ -65,20 +65,25 @@ Vercelの設定はリポジトリだけでは再現されないため、変更�
 | 用途 | Root Directory | 必要な主な設定 |
 | --- | --- | --- |
 | フロントエンド | `frontend` | Firebase、Google Maps、バックエンドURL |
-| バックエンド | `backend` | Route Provider、CORS、必要なら駅すぱあとキー |
+| バックエンド | `backend` | Route Provider、CORS、Googleサーバーキー、必要なら駅すぱあとキー |
 
 バックエンドの環境変数例:
 
 ```text
-ROUTE_PROVIDER=mock
+ROUTE_PROVIDER_MODE=mock
 CORS_ORIGINS=https://<frontend-domain>
+GOOGLE_MAPS_API_KEY=
 EKISPERT_API_KEY=
+TRANSIT_API_URL=https://api.transitous.org/api/v1/plan
+TRANSIT_USER_AGENT=PlanRail/1.0 (contact@example.com)
+TRANSIT_TIMEZONE=Asia/Tokyo
 ```
 
 フロントエンドの環境変数例:
 
 ```text
 VITE_GOOGLE_MAPS_API_KEY=
+VITE_GOOGLE_OAUTH_CLIENT_ID=
 VITE_FIREBASE_API_KEY=
 VITE_FIREBASE_AUTH_DOMAIN=
 VITE_FIREBASE_PROJECT_ID=
@@ -95,6 +100,9 @@ VITE_BACKEND_API_BASE_URL=https://<backend-domain>/api
 - Firebase AuthenticationでGoogleログインが有効であること
 - Firebase AuthenticationのAuthorized domainsにフロントエンドドメインがあること
 - Google Mapsのブラウザ用キーで必要なAPIとHTTPリファラが許可されていること
+- Google Calendar APIが有効で、OAuth同意画面に読み取り専用スコープ、ウェブクライアントにフロントエンドのJavaScript生成元が設定されていること
+- Google Routes用のサーバーキーでRoutes APIとデプロイ元の制限が設定されていること
+- Transitous利用時の `TRANSIT_USER_AGENT` に運用連絡先が含まれること
 - FastAPIの `CORS_ORIGINS` が実際のフロントエンドオリジンと一致すること
 - Firestore Security Rulesが `firestore.rules` の内容でデプロイされていること
 

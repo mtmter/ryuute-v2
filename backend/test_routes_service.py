@@ -1,540 +1,259 @@
 import json
 import os
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
 from unittest.mock import Mock, patch
+from urllib.parse import parse_qs, urlsplit
 
 import httpx
 
 import routes_service
-from route_providers import ekispert_provider
+from route_providers import ekispert_provider, google_provider, transit_provider
+from route_providers.types import (
+    ErrorCategory,
+    PlaceRef,
+    ProviderError,
+    RouteRequest,
+    RouteResult,
+    RouteSegment,
+)
 
 
-SAMPLE_GOOGLE_RESPONSE = {
-    "routes": [
-        {
-            "duration": "3600s",
-            "legs": [
-                {
-                    "steps": [
-                        {
-                            "staticDuration": "300s",
-                            "travelMode": "WALK",
-                        },
-                        {
-                            "staticDuration": "300s",
-                            "travelMode": "WALK",
-                        },
-                        {
-                            "staticDuration": "1800s",
-                            "travelMode": "TRANSIT",
-                            "transitDetails": {
-                                "stopDetails": {
-                                    "departureStop": {"name": "九大学研都市駅"},
-                                    "departureTime": "2026-08-24T00:35:00Z",
-                                    "arrivalStop": {"name": "天神駅"},
-                                    "arrivalTime": "2026-08-24T01:05:00Z",
-                                },
-                                "transitLine": {
-                                    "name": "JR筑肥線",
-                                    "nameShort": "筑肥線",
-                                },
-                            },
-                        },
-                        {
-                            "staticDuration": "900s",
-                            "travelMode": "WALK",
-                        },
-                    ]
-                }
-            ],
-        }
-    ]
-}
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
-class EkispertRoutesServiceTest(unittest.TestCase):
-    def create_success_response(self, response_data=None):
-        response = Mock()
-        response.is_success = True
-        response.status_code = 200
-        if response_data is None:
-            fixture_path = (
-                Path(__file__).parent
-                / "fixtures"
-                / "ekispert_route_demo.json"
-            )
-            response.json.return_value = json.loads(
-                fixture_path.read_text(encoding="utf-8")
-            )
-        else:
-            response.json.return_value = response_data
-        return response
+def request(time_type="arrival", *, overseas=False, coordinates=True):
+    if overseas:
+        origin_coords = (48.2082, 16.3738)
+        destination_coords = (48.1850, 16.3122)
+    elif coordinates:
+        origin_coords = (33.596, 130.215)
+        destination_coords = (33.586, 130.398)
+    else:
+        origin_coords = (None, None)
+        destination_coords = (None, None)
+    return RouteRequest(
+        origin=PlaceRef("33.596,130.215", "出発地", *origin_coords),
+        destination=PlaceRef("33.586,130.398", "目的地", *destination_coords),
+        requested_at=datetime(2026, 8, 25, 10, 12),
+        time_type=time_type,
+    )
 
-    def test_search_route_uses_mock_fixture_and_common_converter(self):
-        result = routes_service.search_route(
-            "33.596,130.215",
-            "33.586,130.398",
-            datetime(2026, 8, 25, 10, 12),
-            provider_name="mock",
-            origin_display_name="九州大学 伊都キャンパス",
-            destination_display_name="Garraway F",
-        )
 
-        self.assertEqual(result["origin"], "九州大学 伊都キャンパス")
-        self.assertEqual(result["destination"], "Garraway F")
-        self.assertEqual(result["departure_at"], "2026-08-25T08:54")
-        self.assertEqual(result["arrival_at"], "2026-08-25T09:57")
-        self.assertEqual(result["duration_minutes"], 63)
-        self.assertEqual(result["transport_mode"], "TRANSIT")
-        self.assertEqual(
-            [segment["type"] for segment in result["segments"]],
-            ["WALK", "TRANSIT", "TRANSIT", "WALK"],
-        )
-        self.assertEqual(
-            result["segments"][1]["line_name"],
-            "昭和バス・九州大学線 2M（九大学研都市駅行）",
-        )
-        self.assertEqual(
-            result["segments"][2]["line_name"],
-            "JR筑肥線・福岡市地下鉄空港線（福岡空港行）",
-        )
+def response(data, status=200):
+    result = Mock()
+    result.is_success = 200 <= status < 300
+    result.status_code = status
+    result.json.return_value = data
+    return result
 
-    def test_mock_route_moves_all_times_to_requested_arrival(self):
-        result = routes_service.search_route(
-            "33.596,130.215",
-            "33.586,130.398",
-            datetime(2026, 8, 26, 9, 40),
-            provider_name="mock",
-            origin_display_name="九州大学 伊都キャンパス",
-            destination_display_name="Garraway F",
-        )
 
-        self.assertEqual(result["departure_at"], "2026-08-26T08:22")
-        self.assertEqual(result["arrival_at"], "2026-08-26T09:25")
-        self.assertEqual(result["duration_minutes"], 63)
-        self.assertEqual(
-            result["segments"][0]["arrival_at"],
-            "2026-08-26T08:24",
-        )
-        self.assertEqual(
-            result["segments"][2]["departure_at"],
-            "2026-08-26T08:52",
-        )
+class ProviderTypesTest(unittest.TestCase):
+    def test_request_validates_coordinates_and_timing(self):
+        with self.assertRaises(ProviderError) as context:
+            PlaceRef("東京", "東京", 35.0, None)
+        self.assertEqual(context.exception.category, ErrorCategory.INVALID_INPUT)
 
-    def test_convert_ekispert_route_accepts_object_and_array_values(self):
-        response_data = {
-            "ResultSet": {
-                "Course": [
-                    {
-                        "Route": {
-                            "Line": {
-                                "timeOnBoard": "7",
-                                "Name": "JR中央線",
-                                "Type": "train",
-                                "DepartureState": {
-                                    "Datetime": {
-                                        "text": "2026-08-25T09:00:00+09:00"
-                                    }
-                                },
-                                "ArrivalState": {
-                                    "Datetime": {
-                                        "text": "2026-08-25T09:07:00+09:00"
-                                    }
-                                },
-                            },
-                            "Point": [
-                                {"Station": {"Name": "高円寺"}},
-                                {"Station": {"Name": "新宿"}},
-                            ],
-                        }
-                    }
-                ]
-            }
-        }
-
-        result = routes_service.convert_ekispert_route(
-            response_data,
-            "高円寺",
-            "新宿",
-        )
-
-        self.assertEqual(result["duration_minutes"], 7)
-        self.assertEqual(result["segments"][0]["type"], "TRANSIT")
-        self.assertEqual(result["segments"][0]["line_name"], "JR中央線")
-
-    def test_convert_ekispert_route_reports_missing_and_invalid_routes(self):
-        with self.assertRaises(routes_service.RouteNotFoundError):
-            routes_service.convert_ekispert_route(
-                {"ResultSet": {}},
-                "出発地",
-                "目的地",
+        with self.assertRaises(ProviderError):
+            RouteRequest(
+                origin=PlaceRef("東京", "東京"),
+                destination=PlaceRef("大阪", "大阪"),
+                requested_at=datetime.now(),
+                time_type="later",
             )
 
-        invalid_route = {
-            "ResultSet": {
-                "Course": {
-                    "Route": {
-                        "Line": {"Name": "徒歩", "Type": "walk"},
-                        "Point": {"Name": "出発地"},
-                    }
-                }
-            }
-        }
-        with self.assertRaises(routes_service.RoutesResponseError):
-            routes_service.convert_ekispert_route(
-                invalid_route,
-                "出発地",
-                "目的地",
+    def test_result_rejects_negative_duration_and_empty_segments(self):
+        with self.assertRaises(ProviderError):
+            RouteResult(
+                origin="A",
+                destination="B",
+                departure_at="2026-01-01T10:00",
+                arrival_at="2026-01-01T09:00",
+                duration_minutes=-1,
+                transport_mode="WALK",
+                provider="mock",
+                route_kind="walk",
+                segments=(),
             )
 
-    def test_search_route_reports_unknown_provider(self):
-        with self.assertRaises(routes_service.RouteProviderError):
-            routes_service.search_route(
-                "出発地",
-                "目的地",
-                datetime(2026, 8, 25, 10, 12),
-                provider_name="unknown",
-            )
 
-    @patch("route_providers.ekispert_provider.httpx.get")
-    def test_ekispert_provider_builds_arrival_search_query(self, mock_get):
-        mock_get.return_value = self.create_success_response()
-
-        response_data = ekispert_provider.get_route(
-            "33.596,130.215",
-            "33.586,130.398",
-            datetime(2026, 8, 25, 1, 12, tzinfo=timezone.utc),
-            api_key="test-api-key",
-        )
-
-        request_url = mock_get.call_args.args[0]
-        query_string = urlsplit(request_url).query
-        query_parameters = parse_qs(query_string)
-        self.assertEqual(
-            urlsplit(request_url).path,
-            "/v1/json/search/course/extreme",
-        )
-        self.assertEqual(
-            query_parameters,
-            {
-                "key": ["test-api-key"],
-                "viaList": ["33.596,130.215:33.586,130.398"],
-                "gcs": ["wgs84"],
-                "date": ["20260825"],
-                "time": ["1012"],
-                "searchType": ["arrival"],
-                "answerCount": ["1"],
-                "sort": ["ekispert"],
-            },
-        )
-        self.assertIn(":", query_string)
-        self.assertNotIn("%3A", query_string)
-        self.assertEqual(mock_get.call_args.kwargs["timeout"], 10.0)
-        self.assertIn("ResultSet", response_data)
-
-    def test_ekispert_provider_requires_api_key(self):
-        with patch.dict(os.environ, {}, clear=True):
-            with self.assertRaises(ekispert_provider.EkispertApiKeyError):
-                ekispert_provider.get_route(
-                    "出発地",
-                    "目的地",
-                    datetime(2026, 8, 25, 10, 12),
-                )
-
-        with patch.dict(os.environ, {}, clear=True):
-            with self.assertRaises(routes_service.RoutesApiKeyError):
-                routes_service.search_route(
-                    "出発地",
-                    "目的地",
-                    datetime(2026, 8, 25, 10, 12),
-                    provider_name="ekispert",
-                )
-
-    @patch("route_providers.ekispert_provider.httpx.get")
-    def test_ekispert_provider_builds_departure_search_query(self, mock_get):
-        mock_get.return_value = self.create_success_response()
-
-        ekispert_provider.get_route(
-            "京都駅",
-            "嵐山",
-            datetime(2026, 9, 12, 13, 0),
-            api_key="test-api-key",
-            time_type="departure",
-        )
-
-        query_parameters = parse_qs(
-            urlsplit(mock_get.call_args.args[0]).query
-        )
-        self.assertEqual(query_parameters["searchType"], ["departure"])
-        self.assertEqual(query_parameters["date"], ["20260912"])
-        self.assertEqual(query_parameters["time"], ["1300"])
-
-    def test_mock_route_anchors_departure_search(self):
-        result = routes_service.search_route(
-            "京都駅",
-            "嵐山",
-            datetime(2026, 9, 12, 13, 0),
-            provider_name="mock",
-            time_type="departure",
-        )
-
-        self.assertEqual(result["departure_at"], "2026-09-12T13:00")
-
-    @patch("route_providers.ekispert_provider.httpx.get")
-    def test_ekispert_provider_reports_timeout_and_connection_errors(
-        self,
-        mock_get,
-    ):
-        error_cases = [
-            httpx.TimeoutException("timeout"),
-            httpx.RequestError("connection failed"),
-        ]
-
-        for request_error in error_cases:
-            with self.subTest(error_type=type(request_error).__name__):
-                mock_get.side_effect = request_error
-                with self.assertRaises(
-                    ekispert_provider.EkispertProviderError
-                ):
-                    ekispert_provider.get_route(
-                        "出発地",
-                        "目的地",
-                        datetime(2026, 8, 25, 10, 12),
-                        api_key="test-api-key",
-                    )
-
-    @patch("route_providers.ekispert_provider.httpx.get")
-    def test_ekispert_provider_reports_http_and_json_errors(self, mock_get):
-        for status_code in (400, 403, 500):
-            with self.subTest(status_code=status_code):
-                http_error_response = Mock()
-                http_error_response.is_success = False
-                http_error_response.status_code = status_code
-                mock_get.return_value = http_error_response
-                with self.assertRaises(
-                    ekispert_provider.EkispertProviderError
-                ):
-                    ekispert_provider.get_route(
-                        "出発地",
-                        "目的地",
-                        datetime(2026, 8, 25, 10, 12),
-                        api_key="test-api-key",
-                    )
-
-        invalid_json_response = self.create_success_response()
-        invalid_json_response.json.side_effect = ValueError("invalid json")
-        mock_get.return_value = invalid_json_response
-
-        with self.assertRaises(ekispert_provider.EkispertProviderError):
-            ekispert_provider.get_route(
-                "出発地",
-                "目的地",
-                datetime(2026, 8, 25, 10, 12),
-                api_key="test-api-key",
-            )
-
-    @patch("route_providers.ekispert_provider.httpx.get")
-    def test_search_route_uses_ekispert_provider_and_common_converter(
-        self,
-        mock_get,
-    ):
-        mock_get.return_value = self.create_success_response()
-
-        with patch.dict(
-            os.environ,
-            {
-                "EKISPERT_API_KEY": "test-api-key",
-                "ROUTE_PROVIDER": "ekispert",
-            },
-            clear=True,
-        ):
+class MockAndEkispertProviderTest(unittest.TestCase):
+    def test_mock_returns_common_route_without_network(self):
+        with patch("httpx.get", side_effect=AssertionError("network")):
             result = routes_service.search_route(
                 "33.596,130.215",
                 "33.586,130.398",
                 datetime(2026, 8, 25, 10, 12),
+                provider_name="mock",
                 origin_display_name="九州大学 伊都キャンパス",
                 destination_display_name="Garraway F",
             )
-
-        self.assertEqual(result["origin"], "九州大学 伊都キャンパス")
-        self.assertEqual(result["destination"], "Garraway F")
+        self.assertEqual(result["provider"], "mock")
+        self.assertEqual(result["departure_at"], "2026-08-25T08:54")
         self.assertEqual(result["arrival_at"], "2026-08-25T09:57")
-        self.assertEqual(result["transport_mode"], "TRANSIT")
+        self.assertEqual(len(result["segments"]), 4)
 
-
-class GoogleRoutesServiceTest(unittest.TestCase):
-    def create_success_response(self, response_data=None):
-        response = Mock()
-        response.is_success = True
-        response.status_code = 200
-        response.json.return_value = response_data or SAMPLE_GOOGLE_RESPONSE
-        return response
-
-    @patch("routes_service.httpx.post")
-    def test_search_route_sends_transit_request_and_converts_response(
-        self,
-        mock_post,
-    ):
-        mock_post.return_value = self.create_success_response()
-
-        result = routes_service.search_google_route(
-            "九州大学 伊都キャンパス",
-            "Garraway F",
-            datetime(2026, 8, 24, 10, 20),
-            api_key="test-api-key",
+    def test_mock_anchors_departure(self):
+        result = routes_service.search_route(
+            "京都駅",
+            "嵐山",
+            datetime(2026, 9, 12, 13, 0),
+            provider_name="mock",
+            time_type="departure",
         )
+        self.assertEqual(result["departure_at"], "2026-09-12T13:00")
 
-        request = mock_post.call_args
-        self.assertEqual(request.args[0], routes_service.ROUTES_API_URL)
-        self.assertEqual(request.kwargs["json"]["travelMode"], "TRANSIT")
-        self.assertEqual(
-            request.kwargs["json"]["arrivalTime"],
-            "2026-08-24T01:20:00Z",
-        )
-        self.assertEqual(
-            request.kwargs["headers"]["X-Goog-Api-Key"],
-            "test-api-key",
-        )
+    @patch("route_providers.ekispert_provider.httpx.get")
+    def test_ekispert_query_and_conversion_are_provider_owned(self, get):
+        data = json.loads((FIXTURES / "ekispert_route_demo.json").read_text())
+        get.return_value = response(data)
+        result = ekispert_provider.search(request(), api_key="test")
+        params = parse_qs(urlsplit(get.call_args.args[0]).query)
+        self.assertEqual(params["searchType"], ["arrival"])
+        self.assertEqual(params["time"], ["1012"])
+        self.assertEqual(result.provider, "ekispert")
+        self.assertEqual(result.route_kind, "transit")
 
-        self.assertEqual(result["departure_at"], "2026-08-24T09:20")
-        self.assertEqual(result["arrival_at"], "2026-08-24T10:20")
-        self.assertEqual(result["duration_minutes"], 60)
-        self.assertEqual(result["transport_mode"], "TRANSIT")
-        self.assertEqual(len(result["segments"]), 3)
+    def test_ekispert_converter_classifies_no_route(self):
+        with self.assertRaises(ProviderError) as context:
+            ekispert_provider.convert_route({"ResultSet": {}}, request())
+        self.assertEqual(context.exception.category, ErrorCategory.NO_ROUTE)
 
-        walk_segment = result["segments"][0]
-        self.assertEqual(walk_segment["type"], "WALK")
-        self.assertEqual(walk_segment["from"], "九州大学 伊都キャンパス")
-        self.assertEqual(walk_segment["to"], "九大学研都市駅")
-        self.assertEqual(walk_segment["departure_at"], "2026-08-24T09:20")
-        self.assertEqual(walk_segment["arrival_at"], "2026-08-24T09:30")
-        self.assertEqual(walk_segment["duration_minutes"], 10)
 
-        transit_segment = result["segments"][1]
-        self.assertEqual(transit_segment["type"], "TRANSIT")
-        self.assertEqual(transit_segment["from"], "九大学研都市駅")
-        self.assertEqual(transit_segment["to"], "天神駅")
-        self.assertEqual(transit_segment["line_name"], "JR筑肥線")
+class TransitProviderTest(unittest.TestCase):
+    def fixture(self):
+        return json.loads((FIXTURES / "transit_route_demo.json").read_text())
 
-        last_walk_segment = result["segments"][2]
-        self.assertEqual(last_walk_segment["from"], "天神駅")
-        self.assertEqual(last_walk_segment["to"], "Garraway F")
-        self.assertEqual(last_walk_segment["arrival_at"], "2026-08-24T10:20")
+    @patch("route_providers.transit_provider.httpx.get")
+    def test_arrival_search_and_iso_response(self, get):
+        get.return_value = response(self.fixture())
+        result = transit_provider.search(request(), user_agent="PlanRail test")
+        self.assertEqual(get.call_args.kwargs["params"]["arriveBy"], "true")
+        self.assertEqual(get.call_args.kwargs["headers"]["User-Agent"], "PlanRail test")
+        self.assertEqual(result.provider, "transit")
+        self.assertEqual(result.departure_at, "2026-08-25T08:54")
+        self.assertIn("非公式", result.notices[0])
 
-    def test_convert_google_route_uses_desired_arrival_for_walk_only_route(self):
-        response_data = {
-            "routes": [
-                {
-                    "duration": "600s",
-                    "legs": [
-                        {
-                            "steps": [
-                                {
-                                    "staticDuration": "600s",
-                                    "travelMode": "WALK",
-                                }
-                            ]
-                        }
-                    ],
-                }
-            ]
-        }
-
-        result = routes_service.convert_google_route(
-            response_data,
-            "出発地",
-            "目的地",
-            datetime(2026, 8, 24, 10, 20),
-        )
-
-        self.assertEqual(result["departure_at"], "2026-08-24T10:10")
-        self.assertEqual(result["arrival_at"], "2026-08-24T10:20")
-        self.assertEqual(result["segments"][0]["from"], "出発地")
-        self.assertEqual(result["segments"][0]["to"], "目的地")
-
-    def test_search_route_raises_error_when_api_key_is_missing(self):
-        with patch.dict(os.environ, {}, clear=True):
-            with self.assertRaises(routes_service.RoutesApiKeyError):
-                routes_service.search_google_route(
-                    "出発地",
-                    "目的地",
-                    datetime(2026, 8, 24, 10, 20),
-                )
-
-    @patch("routes_service.httpx.post")
-    def test_search_route_distinguishes_timeout(self, mock_post):
-        mock_post.side_effect = httpx.TimeoutException("timeout")
-
-        with self.assertRaises(routes_service.RoutesTimeoutError):
-            routes_service.search_google_route(
-                "出発地",
-                "目的地",
-                datetime(2026, 8, 24, 10, 20),
-                api_key="test-api-key",
-            )
-
-    @patch("routes_service.httpx.post")
-    def test_search_route_distinguishes_connection_error(self, mock_post):
-        mock_post.side_effect = httpx.RequestError("connection failed")
-
-        with self.assertRaises(routes_service.RoutesConnectionError):
-            routes_service.search_google_route(
-                "出発地",
-                "目的地",
-                datetime(2026, 8, 24, 10, 20),
-                api_key="test-api-key",
-            )
-
-    @patch("routes_service.httpx.post")
-    def test_search_route_distinguishes_google_error(self, mock_post):
-        response = Mock()
-        response.is_success = False
-        response.status_code = 403
-        response.json.return_value = {
-            "error": {"message": "API key is not authorized"}
-        }
-        mock_post.return_value = response
-
-        with self.assertRaises(routes_service.RoutesApiError) as context:
-            routes_service.search_google_route(
-                "出発地",
-                "目的地",
-                datetime(2026, 8, 24, 10, 20),
-                api_key="test-api-key",
-            )
-
-        self.assertEqual(context.exception.status_code, 403)
-
-    def test_convert_google_route_distinguishes_route_not_found(self):
-        for response_data in ({}, {"routes": []}):
-            with self.subTest(response_data=response_data):
-                with self.assertRaises(routes_service.RouteNotFoundError):
-                    routes_service.convert_google_route(
-                        response_data,
-                        "出発地",
-                        "目的地",
-                        datetime(2026, 8, 24, 10, 20),
-                    )
-
-    def test_convert_google_route_distinguishes_unexpected_response(self):
-        unexpected_responses = [
-            [],
-            {"routes": "invalid"},
-            {"routes": [{"duration": "600s"}]},
+    def test_service_day_seconds_support_after_midnight(self):
+        data = self.fixture()
+        itinerary = data["itineraries"][0]
+        itinerary.update(serviceDate="2026-08-25", startTime=85800, endTime=90600)
+        itinerary["legs"] = [
+            {
+                "mode": "BUS",
+                "serviceDate": "2026-08-25",
+                "startTime": 85800,
+                "endTime": 90600,
+                "from": {"name": "出発地"},
+                "to": {"name": "目的地"},
+                "routeShortName": "深夜バス",
+            }
         ]
+        result = transit_provider.convert_route(data, request())
+        self.assertEqual(result.departure_at, "2026-08-25T23:50")
+        self.assertEqual(result.arrival_at, "2026-08-26T01:10")
 
-        for response_data in unexpected_responses:
-            with self.subTest(response_data=response_data):
-                with self.assertRaises(routes_service.RoutesResponseError):
-                    routes_service.convert_google_route(
-                        response_data,
-                        "出発地",
-                        "目的地",
-                        datetime(2026, 8, 24, 10, 20),
-                    )
+    @patch("route_providers.transit_provider.httpx.get")
+    def test_missing_route_429_timeout_and_invalid_json(self, get):
+        cases = [
+            (response({"itineraries": []}), ErrorCategory.NO_ROUTE),
+            (response({}, 429), ErrorCategory.TRANSIENT),
+            (httpx.TimeoutException("timeout"), ErrorCategory.TRANSIENT),
+        ]
+        for outcome, category in cases:
+            with self.subTest(category=category, outcome=type(outcome).__name__):
+                if isinstance(outcome, Exception):
+                    get.side_effect = outcome
+                else:
+                    get.side_effect = None
+                    get.return_value = outcome
+                with self.assertRaises(ProviderError) as context:
+                    transit_provider.search(request())
+                self.assertEqual(context.exception.category, category)
+        invalid = response({})
+        invalid.json.side_effect = ValueError("invalid")
+        get.side_effect = None
+        get.return_value = invalid
+        with self.assertRaises(ProviderError) as context:
+            transit_provider.search(request())
+        self.assertEqual(context.exception.category, ErrorCategory.INVALID_RESPONSE)
+
+
+class GoogleProviderTest(unittest.TestCase):
+    def fixture(self):
+        return json.loads((FIXTURES / "google_route_demo.json").read_text())
+
+    @patch("route_providers.google_provider.httpx.post")
+    def test_supports_transit_and_walk(self, post):
+        post.return_value = response(self.fixture())
+        transit = google_provider.search(request(), api_key="test", route_kind="transit")
+        self.assertEqual(post.call_args.kwargs["json"]["travelMode"], "TRANSIT")
+        self.assertEqual(transit.provider, "google")
+        walk_data = {
+            "routes": [{"duration": "600s", "legs": [{"steps": [{"staticDuration": "600s", "travelMode": "WALK"}]}]}]
+        }
+        post.return_value = response(walk_data)
+        walk = google_provider.search(request(), api_key="test", route_kind="walk")
+        self.assertEqual(post.call_args.kwargs["json"]["travelMode"], "WALK")
+        self.assertEqual(walk.route_kind, "walk")
+        self.assertEqual(walk.arrival_at, "2026-08-25T10:12")
+
+
+class RouteOrchestrationTest(unittest.TestCase):
+    def successful(self, provider):
+        return RouteResult(
+            origin="出発地",
+            destination="目的地",
+            departure_at="2026-08-25T09:00",
+            arrival_at="2026-08-25T10:00",
+            duration_minutes=60,
+            transport_mode="TRANSIT",
+            provider=provider,
+            route_kind="transit",
+            segments=(RouteSegment("TRANSIT", "出発地", "目的地", "2026-08-25T09:00", "2026-08-25T10:00", 60, "路線"),),
+        )
+
+    def test_auto_order_for_domestic_overseas_and_missing_coordinates(self):
+        self.assertEqual(routes_service.auto_provider_order(request())[0], ("transit", "transit"))
+        self.assertEqual(routes_service.auto_provider_order(request(overseas=True))[0], ("google", "transit"))
+        self.assertEqual(routes_service.auto_provider_order(request(coordinates=False))[0], ("google", "transit"))
+
+    def test_transit_retries_once_then_falls_back(self):
+        calls = []
+
+        def registry(name):
+            def provider(_request, **kwargs):
+                calls.append((name, kwargs.get("route_kind")))
+                if name == "transit":
+                    raise ProviderError(ErrorCategory.TRANSIENT, "timeout", provider=name)
+                return self.successful("google")
+            return provider
+
+        with patch("routes_service.get_route_provider", side_effect=registry):
+            result = routes_service._search_auto(request())
+        self.assertEqual(calls, [("transit", None), ("transit", None), ("google", "walk")])
+        self.assertTrue(result.is_fallback)
+
+    def test_invalid_response_does_not_fallback_and_all_no_route_maps_404(self):
+        for category in (ErrorCategory.INVALID_RESPONSE, ErrorCategory.NO_ROUTE):
+            with self.subTest(category=category):
+                def failing(_name):
+                    def provider(_request, **_kwargs):
+                        raise ProviderError(category, "failed")
+                    return provider
+                with patch("routes_service.get_route_provider", side_effect=failing):
+                    if category == ErrorCategory.INVALID_RESPONSE:
+                        with self.assertRaises(ProviderError):
+                            routes_service._search_auto(request())
+                    else:
+                        with self.assertRaises(ProviderError) as context:
+                            routes_service._search_auto(request())
+                        self.assertEqual(context.exception.category, ErrorCategory.NO_ROUTE)
+
+    def test_unknown_mode_is_provider_error(self):
+        with self.assertRaises(routes_service.RouteProviderError):
+            routes_service.search_route("A", "B", datetime.now(), provider_name="unknown")
 
 
 if __name__ == "__main__":

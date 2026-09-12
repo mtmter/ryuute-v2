@@ -119,6 +119,38 @@ class CorsOriginsTest(unittest.TestCase):
 
 
 class RouteSearchApiTest(unittest.TestCase):
+    def test_response_requires_provider_metadata(self):
+        valid = {
+            "origin": "A",
+            "destination": "B",
+            "departure_at": "2026-09-12T13:00",
+            "arrival_at": "2026-09-12T13:30",
+            "duration_minutes": 30,
+            "transport_mode": "WALK",
+            "provider": "google",
+            "route_kind": "walk",
+            "is_fallback": True,
+            "notices": ["Google Maps提供情報"],
+            "segments": [
+                {
+                    "type": "WALK",
+                    "from": "A",
+                    "to": "B",
+                    "departure_at": "2026-09-12T13:00",
+                    "arrival_at": "2026-09-12T13:30",
+                    "duration_minutes": 30,
+                }
+            ],
+        }
+        model = main.RouteSearchResponse.model_validate(valid)
+        self.assertEqual(model.provider, "google")
+        self.assertTrue(model.is_fallback)
+
+        without_provider = {**valid}
+        del without_provider["provider"]
+        with self.assertRaises(ValueError):
+            main.RouteSearchResponse.model_validate(without_provider)
+
     def test_route_search_accepts_provider_neutral_departure_request(self):
         expected_route = {
             "origin": "京都駅",
@@ -144,6 +176,10 @@ class RouteSearchApiTest(unittest.TestCase):
             time_type="departure",
             origin_display_name="京都駅",
             destination_display_name="嵐山",
+            origin_lat=34.9858,
+            origin_lng=135.7588,
+            destination_lat=None,
+            destination_lng=None,
         )
 
     def test_route_search_works_without_database(self):
@@ -158,6 +194,8 @@ class RouteSearchApiTest(unittest.TestCase):
         self.assertEqual(route["destination"], "Garraway F")
         self.assertEqual(route["arrival_at"], "2026-08-25T09:57")
         self.assertEqual(route["transport_mode"], "TRANSIT")
+        self.assertEqual(route["provider"], "mock")
+        self.assertEqual(route["route_kind"], "transit")
 
     def test_route_search_validates_request(self):
         request_without_origin = {

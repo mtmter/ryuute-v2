@@ -1,0 +1,28 @@
+{
+  "routes": [
+    {
+      "duration": "3600s",
+      "legs": [
+        {
+          "steps": [
+            {"staticDuration": "600s", "travelMode": "WALK"},
+            {
+              "staticDuration": "1800s",
+              "travelMode": "TRANSIT",
+              "transitDetails": {
+                "stopDetails": {
+                  "departureStop": {"name": "九大学研都市駅"},
+                  "departureTime": "2026-08-25T00:04:00Z",
+                  "arrivalStop": {"name": "天神駅"},
+                  "arrivalTime": "2026-08-25T00:34:00Z"
+                },
+                "transitLine": {"name": "JR筑肥線"}
+              }
+            },
+            {"staticDuration": "1200s", "travelMode": "WALK"}
+          ]
+        }
+      ]
+    }
+  ]
+}

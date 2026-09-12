@@ -55,12 +55,14 @@ travelBlocks/{travelBlockId}
 ## バックエンド
 
 - `main.py`: FastAPIアプリ、CORS、リクエスト・レスポンスモデル、HTTPエラー変換
-- `routes_service.py`: Provider選択と駅すぱあと形式から共通Route形式への変換
-- `route_providers/mock_provider.py`: fixtureの読み込みと時刻調整
-- `route_providers/ekispert_provider.py`: 駅すぱあとAPIへのHTTPリクエスト
-- `fixtures/ekispert_route_demo.json`: Mock Providerが返す駅すぱあと形式データ
+- `routes_service.py`: Provider選択、retry、fallback、HTTP向けエラー変換
+- `route_providers/types.py`: Provider共通のリクエスト、結果、エラー分類
+- `route_providers/mock_provider.py`: 外部通信なしの固定共通Route
+- `route_providers/transit_provider.py`: TransitousへのHTTPリクエストと変換
+- `route_providers/google_provider.py`: Google RoutesへのHTTPリクエストと変換
+- `route_providers/ekispert_provider.py`: 駅すぱあとへのHTTPリクエストと変換
 
-Providerから取得したデータはバックエンドでアプリ共通Route JSONへ変換します。フロントエンドとFirestoreは駅すぱあとの生レスポンスを扱いません。
+各Providerは取得したデータをアプリ共通Route JSONへ変換します。フロントエンドとFirestoreはProvider固有の生レスポンスを扱いません。
 
 `POST /api/route-search` は `origin`、`destination` と `timing.type`（`arrival` または `departure`）、`timing.at` を受け付けます。旧Event形式も移行期間中は到着検索として受け付けます。
 
@@ -77,8 +79,4 @@ http://127.0.0.1:5173
 
 `CORS_ORIGINS` が設定されている場合は、カンマ区切りの値を使用します。
 
-## 残存している旧Google Routesコード
-
-`backend/routes_service.py` にはGoogle Routes APIを呼び出して共通Route形式へ変換する関数と、そのユニットテストが残っています。ただし、この関数は現在のProvider一覧にもFastAPIエンドポイントにも接続されていません。
-
-このコードを互換用として維持するか削除するかは未決定です。現在のプロダクト仕様には含めません。
+Provider選択と運用上の注意は[経路Provider資料](route-providers.md)を参照してください。

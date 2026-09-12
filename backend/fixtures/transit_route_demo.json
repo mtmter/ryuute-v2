@@ -1,0 +1,33 @@
+{
+  "itineraries": [
+    {
+      "duration": 3780,
+      "startTime": "2026-08-24T23:54:00Z",
+      "endTime": "2026-08-25T00:57:00Z",
+      "legs": [
+        {
+          "mode": "WALK",
+          "startTime": "2026-08-24T23:54:00Z",
+          "endTime": "2026-08-24T23:59:00Z",
+          "from": {"name": "出発地"},
+          "to": {"name": "九大学研都市駅"}
+        },
+        {
+          "mode": "RAIL",
+          "startTime": "2026-08-24T23:59:00Z",
+          "endTime": "2026-08-25T00:49:00Z",
+          "from": {"name": "九大学研都市駅"},
+          "to": {"name": "天神駅"},
+          "routeShortName": "筑肥線"
+        },
+        {
+          "mode": "WALK",
+          "startTime": "2026-08-25T00:49:00Z",
+          "endTime": "2026-08-25T00:57:00Z",
+          "from": {"name": "天神駅"},
+          "to": {"name": "目的地"}
+        }
+      ]
+    }
+  ]
+}

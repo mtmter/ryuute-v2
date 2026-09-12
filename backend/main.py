@@ -94,11 +94,11 @@ class RouteSearchResponse(BaseModel):
     arrival_at: str
     duration_minutes: int = Field(ge=0)
     transport_mode: str
-    provider: str | None = None
-    route_kind: Literal["transit", "walk"] | None = None
+    provider: Literal["transit", "google", "ekispert", "mock"]
+    route_kind: Literal["transit", "walk"]
     is_fallback: bool = False
     notices: list[str] = Field(default_factory=list)
-    segments: list[RouteSegment]
+    segments: list[RouteSegment] = Field(min_length=1)
 
 
 def clean_optional_text(value):
@@ -148,6 +148,10 @@ def search_direct_route(request: DirectRouteSearchRequest):
             "検索日時が不正です",
         )
         time_type = request.timing.type
+        origin_lat = request.origin.lat
+        origin_lng = request.origin.lng
+        destination_lat = request.destination.lat
+        destination_lng = request.destination.lng
     elif request.event:
         event = request.event
         origin_name = clean_optional_text(request.origin_name)
@@ -180,6 +184,10 @@ def search_direct_route(request: DirectRouteSearchRequest):
             minutes=event.arrival_buffer_minutes or 0,
         )
         time_type = "arrival"
+        origin_lat = request.origin_lat
+        origin_lng = request.origin_lng
+        destination_lat = event.destination_lat
+        destination_lng = event.destination_lng
     else:
         raise HTTPException(
             status_code=400,
@@ -205,6 +213,10 @@ def search_direct_route(request: DirectRouteSearchRequest):
             time_type=time_type,
             origin_display_name=origin_display_name,
             destination_display_name=destination_display_name,
+            origin_lat=origin_lat,
+            origin_lng=origin_lng,
+            destination_lat=destination_lat,
+            destination_lng=destination_lng,
         )
     except RouteNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error

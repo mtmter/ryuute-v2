@@ -1,18 +1,31 @@
-from . import ekispert_provider, mock_provider
+from . import ekispert_provider, google_provider, mock_provider, transit_provider
+from .types import ErrorCategory, PlaceRef, ProviderError, RouteRequest, RouteResult
 
 
 ROUTE_PROVIDERS = {
-    "mock": mock_provider.get_route,
-    "ekispert": ekispert_provider.get_route,
+    "transit": transit_provider.search,
+    "google": google_provider.search,
+    "ekispert": ekispert_provider.search,
+    "mock": mock_provider.search,
 }
 
 
 def get_route_provider(provider_name):
-    """設定名に対応する経路取得関数を返す。"""
     try:
         return ROUTE_PROVIDERS[provider_name]
     except KeyError as error:
-        supported_names = ", ".join(ROUTE_PROVIDERS)
-        raise ValueError(
-            f"ROUTE_PROVIDERは{supported_names}のいずれかを指定してください"
+        supported = ", ".join(ROUTE_PROVIDERS)
+        raise ProviderError(
+            ErrorCategory.NOT_CONFIGURED,
+            f"ROUTE_PROVIDER_MODEはauto, {supported}のいずれかを指定してください",
         ) from error
+
+
+__all__ = [
+    "ErrorCategory",
+    "PlaceRef",
+    "ProviderError",
+    "RouteRequest",
+    "RouteResult",
+    "get_route_provider",
+]
