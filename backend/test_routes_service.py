@@ -254,6 +254,36 @@ class EkispertRoutesServiceTest(unittest.TestCase):
                 )
 
     @patch("route_providers.ekispert_provider.httpx.get")
+    def test_ekispert_provider_builds_departure_search_query(self, mock_get):
+        mock_get.return_value = self.create_success_response()
+
+        ekispert_provider.get_route(
+            "京都駅",
+            "嵐山",
+            datetime(2026, 9, 12, 13, 0),
+            api_key="test-api-key",
+            time_type="departure",
+        )
+
+        query_parameters = parse_qs(
+            urlsplit(mock_get.call_args.args[0]).query
+        )
+        self.assertEqual(query_parameters["searchType"], ["departure"])
+        self.assertEqual(query_parameters["date"], ["20260912"])
+        self.assertEqual(query_parameters["time"], ["1300"])
+
+    def test_mock_route_anchors_departure_search(self):
+        result = routes_service.search_route(
+            "京都駅",
+            "嵐山",
+            datetime(2026, 9, 12, 13, 0),
+            provider_name="mock",
+            time_type="departure",
+        )
+
+        self.assertEqual(result["departure_at"], "2026-09-12T13:00")
+
+    @patch("route_providers.ekispert_provider.httpx.get")
     def test_ekispert_provider_reports_timeout_and_connection_errors(
         self,
         mock_get,

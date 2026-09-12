@@ -3,7 +3,7 @@ import { parseDateTime, toDateTimeInputValue } from "../dateUtils";
 import DateTimePicker from "./DateTimePicker";
 import PlaceAutocompleteInput from "./PlaceAutocompleteInput";
 
-function AddItemModal({ initialValues, onClose, onSubmit }) {
+function AddItemModal({ initialValues, onClose, onSubmit, trips = [] }) {
   const [itemType, setItemType] = useState(initialValues.itemType);
   const [title, setTitle] = useState("");
   const [eventStartAt, setEventStartAt] = useState(
@@ -16,6 +16,11 @@ function AddItemModal({ initialValues, onClose, onSubmit }) {
   const [destination, setDestination] = useState("");
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [arrivalBufferMinutes, setArrivalBufferMinutes] = useState("");
+  const [tripId, setTripId] = useState(initialValues.tripId ?? "");
+  const [originName, setOriginName] = useState("");
+  const [travelMode, setTravelMode] = useState("train");
+  const [bookingStatus, setBookingStatus] = useState("planned");
+  const [linkUrl, setLinkUrl] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -40,15 +45,11 @@ function AddItemModal({ initialValues, onClose, onSubmit }) {
     event.preventDefault();
 
     if (!title.trim()) {
-      setErrorMessage(
-        itemType === "event"
-          ? "予定タイトルを入力してください"
-          : "タスクタイトルを入力してください",
-      );
+      setErrorMessage("タイトルを入力してください");
       return;
     }
 
-    if (itemType === "event") {
+    if (itemType === "event" || itemType === "travel") {
       if (!eventStartAt || !eventEndAt) {
         setErrorMessage("開始日時と終了日時を入力してください");
         return;
@@ -69,6 +70,16 @@ function AddItemModal({ initialValues, onClose, onSubmit }) {
       }
     }
 
+    if (itemType === "travel" && (!originName.trim() || !destination.trim())) {
+      setErrorMessage("出発地と目的地を入力してください");
+      return;
+    }
+
+    if (itemType === "trip" && eventStartAt && eventEndAt && eventEndAt < eventStartAt) {
+      setErrorMessage("終了日時は開始日時以降にしてください");
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMessage("");
 
@@ -86,6 +97,28 @@ function AddItemModal({ initialValues, onClose, onSubmit }) {
           destination_lng: selectedPlace?.lng ?? null,
           arrival_buffer_minutes:
             arrivalBufferMinutes === "" ? null : Number(arrivalBufferMinutes),
+          trip_id: tripId || null,
+        });
+      } else if (itemType === "travel") {
+        await onSubmit("travel", {
+          title: title.trim(),
+          start_at: eventStartAt,
+          end_at: eventEndAt,
+          origin: { name: originName.trim(), address: null, place_id: null, lat: null, lng: null },
+          destination: { name: destination.trim(), address: null, place_id: null, lat: null, lng: null },
+          source_type: "manual",
+          transport_mode: travelMode,
+          booking_status: bookingStatus,
+          memo: description,
+          link_url: linkUrl.trim() || null,
+          trip_id: tripId || null,
+        });
+      } else if (itemType === "trip") {
+        await onSubmit("trip", {
+          title: title.trim(),
+          notes: description,
+          start_at: eventStartAt || null,
+          end_at: eventEndAt || null,
         });
       } else {
         await onSubmit("task", {
@@ -136,7 +169,13 @@ function AddItemModal({ initialValues, onClose, onSubmit }) {
           <div>
             <p>新しく追加</p>
             <h2 id="add-item-heading">
-              {itemType === "event" ? "予定を追加" : "タスクを追加"}
+              {itemType === "event"
+                ? "予定を追加"
+                : itemType === "travel"
+                  ? "移動を追加"
+                  : itemType === "trip"
+                    ? "Tripを追加"
+                    : "タスクを追加"}
             </h2>
           </div>
           <button
@@ -162,6 +201,26 @@ function AddItemModal({ initialValues, onClose, onSubmit }) {
             予定
           </button>
           <button
+            className={itemType === "travel" ? "is-active" : ""}
+            type="button"
+            onClick={() => {
+              setItemType("travel");
+              setErrorMessage("");
+            }}
+          >
+            移動
+          </button>
+          <button
+            className={itemType === "trip" ? "is-active" : ""}
+            type="button"
+            onClick={() => {
+              setItemType("trip");
+              setErrorMessage("");
+            }}
+          >
+            Trip
+          </button>
+          <button
             className={itemType === "task" ? "is-active" : ""}
             type="button"
             onClick={() => {
@@ -176,14 +235,26 @@ function AddItemModal({ initialValues, onClose, onSubmit }) {
         <form className="add-item-form" onSubmit={handleSubmit}>
           <div className="modal-form-field">
             <label htmlFor="item-title">
-              {itemType === "event" ? "予定タイトル" : "タスクタイトル"}
+              {itemType === "event"
+                ? "予定タイトル"
+                : itemType === "travel"
+                  ? "便名・移動タイトル"
+                  : itemType === "trip"
+                    ? "Tripタイトル"
+                    : "タスクタイトル"}
             </label>
             <input
               id="item-title"
               type="text"
               value={title}
               placeholder={
-                itemType === "event" ? "例：ミーティング" : "例：資料を作る"
+                itemType === "event"
+                  ? "例：ミーティング"
+                  : itemType === "travel"
+                    ? "例：東京行き夜行バス"
+                    : itemType === "trip"
+                      ? "例：京都旅行"
+                      : "例：資料を作る"
               }
               autoFocus
               required
@@ -265,7 +336,60 @@ function AddItemModal({ initialValues, onClose, onSubmit }) {
                   }
                 />
               </div>
+
+              <div className="modal-form-field">
+                <label htmlFor="event-trip">Trip <span>任意</span></label>
+                <select id="event-trip" value={tripId} onChange={(event) => setTripId(event.target.value)}>
+                  <option value="">関連付けない</option>
+                  {trips.map((trip) => <option value={trip.id} key={trip.id}>{trip.title}</option>)}
+                </select>
+              </div>
             </>
+          ) : itemType === "travel" ? (
+            <>
+              <div className="modal-date-fields">
+                <DateTimePicker id="travel-start-at" label="出発日時" value={eventStartAt} onChange={handleEventStartChange} />
+                <DateTimePicker id="travel-end-at" label="到着日時" value={eventEndAt} min={eventStartAt} onChange={setEventEndAt} />
+              </div>
+              <div className="modal-form-field">
+                <label htmlFor="travel-origin">出発地</label>
+                <input id="travel-origin" value={originName} onChange={(event) => setOriginName(event.target.value)} placeholder="例：京都駅" />
+              </div>
+              <div className="modal-form-field">
+                <label htmlFor="travel-destination">目的地</label>
+                <input id="travel-destination" value={destination} onChange={(event) => setDestination(event.target.value)} placeholder="例：嵐山" />
+              </div>
+              <div className="modal-date-fields">
+                <div className="modal-form-field">
+                  <label htmlFor="travel-mode">交通手段</label>
+                  <select id="travel-mode" value={travelMode} onChange={(event) => setTravelMode(event.target.value)}>
+                    <option value="train">鉄道</option><option value="bus">バス</option><option value="flight">飛行機</option><option value="ferry">船</option><option value="walk">徒歩</option><option value="car">車</option><option value="bike">自転車</option><option value="other">その他</option>
+                  </select>
+                </div>
+                <div className="modal-form-field">
+                  <label htmlFor="travel-booking">予約状態</label>
+                  <select id="travel-booking" value={bookingStatus} onChange={(event) => setBookingStatus(event.target.value)}>
+                    <option value="planned">未予約・予定</option><option value="booked">予約済み</option>
+                  </select>
+                </div>
+              </div>
+              <div className="modal-form-field">
+                <label htmlFor="travel-trip">Trip <span>任意</span></label>
+                <select id="travel-trip" value={tripId} onChange={(event) => setTripId(event.target.value)}>
+                  <option value="">関連付けない</option>
+                  {trips.map((trip) => <option value={trip.id} key={trip.id}>{trip.title}</option>)}
+                </select>
+              </div>
+              <div className="modal-form-field">
+                <label htmlFor="travel-link">予約・案内URL <span>任意</span></label>
+                <input id="travel-link" type="url" value={linkUrl} onChange={(event) => setLinkUrl(event.target.value)} />
+              </div>
+            </>
+          ) : itemType === "trip" ? (
+            <div className="modal-date-fields">
+              <DateTimePicker id="trip-start-at" label="開始日時" optional value={eventStartAt} onChange={handleEventStartChange} />
+              <DateTimePicker id="trip-end-at" label="終了日時" optional value={eventEndAt} min={eventStartAt} onChange={setEventEndAt} />
+            </div>
           ) : (
             <DateTimePicker
               defaultTime="23:45"

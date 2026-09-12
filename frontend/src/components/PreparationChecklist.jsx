@@ -2,6 +2,9 @@ import { useState } from "react";
 
 function PreparationChecklist({
   eventId,
+  ownerId = eventId,
+  ownerType = "event",
+  subjectLabel = ownerType === "trip" ? "Trip" : "予定",
   preparations,
   onAdd,
   onDelete,
@@ -28,7 +31,7 @@ function PreparationChecklist({
     setErrorMessage("");
 
     try {
-      await onAdd(eventId, trimmedTitle);
+      await onAdd(ownerType, ownerId, trimmedTitle);
       setNewTitle("");
     } catch (error) {
       setErrorMessage(error.message);
@@ -42,7 +45,7 @@ function PreparationChecklist({
     setErrorMessage("");
 
     try {
-      await onUpdate(eventId, preparation.id, {
+      await onUpdate(ownerType, ownerId, preparation.id, {
         title: preparation.title,
         completed: !preparation.completed,
       });
@@ -72,7 +75,7 @@ function PreparationChecklist({
     setErrorMessage("");
 
     try {
-      await onUpdate(eventId, preparation.id, {
+      await onUpdate(ownerType, ownerId, preparation.id, {
         title: trimmedTitle,
         completed: preparation.completed,
       });
@@ -90,7 +93,7 @@ function PreparationChecklist({
     setErrorMessage("");
 
     try {
-      await onDelete(eventId, preparation.id);
+      await onDelete(ownerType, ownerId, preparation.id);
       if (editingId === preparation.id) {
         setEditingId(null);
         setEditingTitle("");
@@ -106,7 +109,7 @@ function PreparationChecklist({
     <section className="preparation-checklist" aria-labelledby="preparation-heading">
       <div className="preparation-heading">
         <div>
-          <p>予定に必要なもの</p>
+          <p>{subjectLabel}に必要なもの</p>
           <h3 id="preparation-heading">準備チェックリスト</h3>
         </div>
         {preparations && (
@@ -201,10 +204,10 @@ function PreparationChecklist({
 
       {preparations !== null && (
         <form className="preparation-add-form" onSubmit={handleAdd}>
-          <label htmlFor={`preparation-title-${eventId}`}>準備項目を追加</label>
+          <label htmlFor={`preparation-title-${ownerType}-${ownerId}`}>準備項目を追加</label>
           <div>
             <input
-              id={`preparation-title-${eventId}`}
+              id={`preparation-title-${ownerType}-${ownerId}`}
               type="text"
               value={newTitle}
               placeholder="例：PCを充電する"

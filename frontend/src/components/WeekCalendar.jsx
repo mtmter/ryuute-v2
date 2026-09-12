@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 import {
   WEEKDAY_NAMES,
-  eventOccursOnDate,
   formatTime,
   getDateKey,
-  getEventPositionForDay,
   getWeekDates,
   isSameDay,
 } from "../dateUtils";
+import { layoutCalendarItemsForDay } from "../travelUtils";
 
 const HOUR_HEIGHT = 56;
 const MAX_TASKS_WITHOUT_SUMMARY = 3;
@@ -25,10 +24,12 @@ function formatMinutes(minutes) {
 
 function WeekCalendar({
   events,
+  travelBlocks,
   tasks,
   selectedDate,
   onEventClick,
   onTaskClick,
+  onTravelBlockClick,
   onTimeClick,
 }) {
   const weekDates = getWeekDates(selectedDate);
@@ -156,13 +157,13 @@ function WeekCalendar({
               </div>
 
               {weekDates.map((date) => {
-                const dateEvents = events
-                  .filter((event) => eventOccursOnDate(event, date))
-                  .sort((firstEvent, secondEvent) =>
-                    (firstEvent.start_at ?? "").localeCompare(
-                      secondEvent.start_at ?? "",
-                    ),
-                  );
+                const dateItems = layoutCalendarItemsForDay(
+                  [
+                    ...events.map((event) => ({ ...event, calendar_kind: "event" })),
+                    ...travelBlocks.map((block) => ({ ...block, calendar_kind: "travel" })),
+                  ],
+                  date,
+                );
 
                 return (
                   <div
@@ -182,26 +183,29 @@ function WeekCalendar({
                       onTimeClick(date, roundedMinutes);
                     }}
                   >
-                    {dateEvents.map((event) => {
-                      const position = getEventPositionForDay(event, date);
-
+                    {dateItems.map((item) => {
+                      const { position } = item;
                       return (
                         <div
-                          className="week-event"
+                          className={`week-event${item.calendar_kind === "travel" ? " week-travel-block" : ""}${item.needs_review ? " needs-review" : ""}${item.hasOverlap ? " has-overlap" : ""}`}
                           style={{
                             top: `${(position.startMinutes / 60) * HOUR_HEIGHT}px`,
                             height: `${Math.max(
                               (position.durationMinutes / 60) * HOUR_HEIGHT,
                               28,
                             )}px`,
+                            left: `calc(${item.leftPercent}% + 2px)`,
+                            width: `calc(${item.widthPercent}% - 4px)`,
+                            right: "auto",
                           }}
-                          title={event.title}
-                          key={event.id}
+                          title={`${item.title}${item.hasOverlap ? "（時間が重複しています）" : ""}`}
+                          key={`${item.calendar_kind}-${item.id}`}
                           role="button"
                           tabIndex={0}
                           onClick={(clickEvent) => {
                             clickEvent.stopPropagation();
-                            onEventClick(event);
+                            if (item.calendar_kind === "travel") onTravelBlockClick(item);
+                            else onEventClick(item);
                           }}
                           onKeyDown={(keyEvent) => {
                             if (
@@ -210,11 +214,12 @@ function WeekCalendar({
                             ) {
                               keyEvent.preventDefault();
                               keyEvent.stopPropagation();
-                              onEventClick(event);
+                              if (item.calendar_kind === "travel") onTravelBlockClick(item);
+                              else onEventClick(item);
                             }
                           }}
                         >
-                          <strong>{event.title}</strong>
+                          <strong>{item.calendar_kind === "travel" ? `⇢ ${item.title}` : item.title}</strong>
                           <span>
                             {formatMinutes(position.startMinutes)}–
                             {formatMinutes(

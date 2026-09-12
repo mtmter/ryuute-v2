@@ -32,24 +32,24 @@ viaList=<origin>:<destination>
 gcs=wgs84
 date=YYYYMMDD
 time=HHMM
-searchType=arrival
+searchType=arrival|departure
 answerCount=1
 sort=ekispert
 ```
 
-`viaList` の区切り文字 `:` はURLエンコードせずに送信します。到着希望日時は日本標準時へ変換して `date` と `time` に分けます。
+`viaList` の区切り文字 `:` はURLエンコードせずに送信します。検索日時は日本標準時へ変換して `date` と `time` に分け、行きは到着検索、帰りは出発検索を使用します。
 
 APIキーがない場合、タイムアウト、接続失敗、HTTPエラー、JSON以外のレスポンスはProviderエラーとして扱います。
 
 ## Mock Provider
 
-Mock Providerは `backend/fixtures/ekispert_route_demo.json` を読み込みます。fixtureの基準到着希望日時は、コード上で次に固定されています。
+Mock Providerは `backend/fixtures/ekispert_route_demo.json` を読み込みます。到着検索のfixture基準日時は、コード上で次に固定されています。
 
 ```text
 2026-08-25T10:12:00+09:00
 ```
 
-検索時の到着希望日時との差を求め、fixture内にあるすべての `Datetime.text` へ同じ差分を加えます。この処理は区間時間と待ち時間を保ったまま表示日時を移動するものであり、指定日時における実際の運行便を再探索するものではありません。
+到着検索では基準到着希望日時、出発検索ではfixtureの先頭出発日時との差を求め、fixture内にあるすべての `Datetime.text` へ同じ差分を加えます。この処理は区間時間と待ち時間を保ったまま表示日時を移動するものであり、指定日時における実際の運行便を再探索するものではありません。
 
 fixtureを置き換える場合は、`mock_provider.py` の `FIXTURE_DESIRED_ARRIVAL_AT` も新しいfixtureの基準条件に合わせる必要があります。
 
