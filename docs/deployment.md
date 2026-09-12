@@ -4,12 +4,14 @@
 
 ## 現在の本番環境
 
-2026年9月8日にVercel CLIと公開URLで確認した構成です。
+2026年9月13日にVercel CLIと公開URLで確認した構成です。GitHubリポジトリは `mtmter/planrail`、VercelプロジェクトはPlanRail名へ変更済みです。
 
 | 用途 | Project | Root Directory | Framework Preset | 公開URL |
 | --- | --- | --- | --- | --- |
-| フロントエンド | `ryuute-v2-frontend` | `frontend` | Vite | `https://ryuute-v2-frontend.vercel.app` |
-| バックエンド | `ryuute-v2-backend` | `backend` | FastAPI | `https://ryuute-v2-backend.vercel.app` |
+| フロントエンド | `planrail-frontend` | `frontend` | Vite | `https://planrail-frontend.vercel.app` |
+| バックエンド | `planrail-backend` | `backend` | FastAPI | `https://planrail-backend.vercel.app` |
+
+旧URL `ryuute-v2-frontend.vercel.app` と `ryuute-v2-backend.vercel.app` は移行期間中の互換性のため、同じProduction deploymentへ向けたaliasとして残しています。
 
 両プロジェクトの直近Production Deploymentは `READY` です。フロントエンドは `npm run build`、バックエンドは `pip install -r requirements.txt` を使用する設定です。VercelのProject設定では両方にNode.js 24.xが選択されていますが、バックエンドのPythonランタイムバージョンはリポジトリでもVercel CLIの表示でも確認できませんでした。
 
@@ -42,7 +44,7 @@ Productionには `EKISPERT_API_KEY` が登録されていません。公開経�
 - フロントエンドURLがHTTP 200とHTMLを返す
 - `GET /api/health` がHTTP 200と `{"status":"ok"}` を返す
 - `POST /api/route-search` がHTTP 200と共通Route JSONを返す
-- バックエンドが `https://ryuute-v2-frontend.vercel.app` をCORSで許可する
+- バックエンドの `CORS_ORIGINS` が `https://planrail-frontend.vercel.app` と旧フロントエンドURLの両方を許可する
 
 ## リポジトリで管理している設定
 

@@ -82,7 +82,8 @@ class CorsOriginsTest(unittest.TestCase):
             os.environ,
             {
                 "CORS_ORIGINS": (
-                    " https://ryuute-v2-frontend.vercel.app, "
+                    " https://planrail-frontend.vercel.app, "
+                    "https://ryuute-v2-frontend.vercel.app, "
                     ",https://preview.example.com "
                 ),
             },
@@ -91,6 +92,7 @@ class CorsOriginsTest(unittest.TestCase):
             self.assertEqual(
                 main.get_cors_origins(),
                 [
+                    "https://planrail-frontend.vercel.app",
                     "https://ryuute-v2-frontend.vercel.app",
                     "https://preview.example.com",
                 ],

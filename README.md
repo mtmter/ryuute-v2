@@ -38,10 +38,12 @@ Googleアカウントでログインすると、ユーザーごとのデータ�
 
 ## 本番環境
 
-サービスの表示名はPlanRailです。既存のVercelプロジェクト名と公開URLは運用上の互換性のため従来の `ryuute-v2` のままです。
+本番フロントエンドとバックエンドはPlanRail用のVercelプロジェクトとURLで提供します。旧URLも移行期間中の互換性のため残しています。
 
-- フロントエンド: [https://ryuute-v2-frontend.vercel.app](https://ryuute-v2-frontend.vercel.app)
-- バックエンド・ヘルスチェック: [https://ryuute-v2-backend.vercel.app/api/health](https://ryuute-v2-backend.vercel.app/api/health)
+- フロントエンド: [https://planrail-frontend.vercel.app](https://planrail-frontend.vercel.app)
+- バックエンド・ヘルスチェック: [https://planrail-backend.vercel.app/api/health](https://planrail-backend.vercel.app/api/health)
+- 旧フロントエンドURL: [https://ryuute-v2-frontend.vercel.app](https://ryuute-v2-frontend.vercel.app)
+- 旧バックエンドURL: [https://ryuute-v2-backend.vercel.app/api/health](https://ryuute-v2-backend.vercel.app/api/health)
 
 フロントエンドとバックエンドは、同じリポジトリから別々のVercel Projectとしてデプロイしています。Root Directory、Framework Preset、環境変数などの再現手順は[デプロイ資料](docs/deployment.md)を参照してください。
 
