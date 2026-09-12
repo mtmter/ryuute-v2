@@ -35,12 +35,10 @@ VITE_BACKEND_API_BASE_URL
 ```text
 CORS_ORIGINS
 ROUTE_PROVIDER_MODE
-TRANSIT_API_URL
-TRANSIT_USER_AGENT
-TRANSIT_TIMEZONE
+LS8H_TRANSIT_API_URL
 ```
 
-`ROUTE_PROVIDER_MODE` は `auto` に設定しています。日本国内で座標を持つ地点の検索はTransitousを優先し、対象外・経路なし・timeout・rate limit・server errorのときだけGoogle徒歩検索へfallbackします。旧 `ROUTE_PROVIDER=mock` は削除済みです。Productionには `EKISPERT_API_KEY` が登録されていません。
+`ROUTE_PROVIDER_MODE` は `auto` に設定しています。日本国内で座標を持つ地点の検索はLS8H Transit APIを優先し、対象外・経路なし・timeout・rate limit・server errorのときだけGoogle徒歩検索へfallbackします。旧 `ROUTE_PROVIDER=mock` は削除済みです。Productionには `EKISPERT_API_KEY` が登録されていません。
 
 公開環境では次を確認済みです。
 
@@ -78,9 +76,7 @@ ROUTE_PROVIDER_MODE=auto
 CORS_ORIGINS=https://<frontend-domain>
 GOOGLE_MAPS_API_KEY=
 EKISPERT_API_KEY=
-TRANSIT_API_URL=https://api.transitous.org/api/v1/plan
-TRANSIT_USER_AGENT=PlanRail/1.0 (contact@example.com)
-TRANSIT_TIMEZONE=Asia/Tokyo
+LS8H_TRANSIT_API_URL=https://api.transit.ls8h.com/api/v1/plan
 ```
 
 フロントエンドの環境変数例:
@@ -106,7 +102,6 @@ VITE_BACKEND_API_BASE_URL=https://<backend-domain>/api
 - Google Mapsのブラウザ用キーで必要なAPIとHTTPリファラが許可されていること
 - Google Calendar APIが有効で、OAuth同意画面に読み取り専用スコープ、ウェブクライアントにフロントエンドのJavaScript生成元が設定されていること
 - Google Routes用のサーバーキーでRoutes APIとデプロイ元の制限が設定されていること
-- Transitous利用時の `TRANSIT_USER_AGENT` に運用連絡先が含まれること
 - FastAPIの `CORS_ORIGINS` が実際のフロントエンドオリジンと一致すること
 - Firestore Security Rulesが `firestore.rules` の内容でデプロイされていること
 

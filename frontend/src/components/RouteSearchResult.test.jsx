@@ -35,7 +35,7 @@ describe("RouteSearchResult provider metadata", () => {
   it("shows Transit attribution and notices", () => {
     render(<RouteSearchResult route={baseRoute} />);
 
-    expect(screen.getByText("Transit APIによる非公式情報")).toBeTruthy();
+    expect(screen.getByText("LS8H Transit APIによる非公式情報")).toBeTruthy();
     expect(
       screen.getByText("重要な移動は交通事業者の案内も確認してください。"),
     ).toBeTruthy();

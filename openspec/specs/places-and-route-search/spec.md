@@ -8,7 +8,7 @@
 
 ### Requirement: 場所候補と文字入力を提供する
 
-予定の追加・編集時の場所名と、経路検索時の出発地にはGoogle Placesの候補入力を提供しなければならない（MUST）。Google Maps APIキーがない場合または候補を読み込めない場合は、通常の文字入力へフォールバックしなければならない。
+予定の追加・編集時と経路検索時の地点入力には、1つのGoogle Places候補入力を提供しなければならない（MUST）。Google Maps APIキーがない場合または候補を読み込めない場合は、通常の文字入力へフォールバックしなければならない。
 
 #### Scenario: Places候補を選択する
 
@@ -18,12 +18,26 @@
 #### Scenario: 候補を選択せず入力する
 
 - **WHEN** ユーザーが文字列だけを入力する
-- **THEN** システムはPlace IDや座標がなくても予定の場所または経路検索の出発地として受け付ける
+- **THEN** システムはPlace IDや座標がなくても、予定の単一場所として受け付ける
 
 #### Scenario: 予定へ候補を保存する
 
 - **WHEN** 選択したPlaces候補を含む予定を保存する
 - **THEN** システムは名前を `location_name`、住所を `destination`、Place IDを `destination_place_id`、座標を `destination_lat` と `destination_lng` に保存する
+
+### Requirement: 座標を持つ地点だけで経路検索を開始する
+
+システムは、検索する両地点に緯度と経度がそろっている場合だけ経路検索操作を有効にしなければならない（MUST）。予定の自由入力場所は保存できるが、座標を持たないまま経路検索APIへ送信してはならない（MUST NOT）。
+
+#### Scenario: 保存済み予定に座標がない
+
+- **WHEN** ユーザーが座標を持たない予定の経路検索操作を表示する
+- **THEN** システムは操作を無効化し、Places候補を選び直す案内を表示する
+
+#### Scenario: 検索地点を自由入力した
+
+- **WHEN** ユーザーが経路検索フォームの地点を候補選択せずに入力する
+- **THEN** システムは検索を開始せず、候補を選択する案内を表示する
 
 ### Requirement: Google Mapsリンクを生成する
 
@@ -71,7 +85,7 @@
 
 ### Requirement: Route Providerを選択する
 
-バックエンドは `ROUTE_PROVIDER` により `mock` または `ekispert` を選択し、未設定時は `mock` を使用しなければならない（MUST）。
+バックエンドは `ROUTE_PROVIDER_MODE` によりProviderを選択し、未設定時は `auto` を使用しなければならない（MUST）。`auto` は日本国内の座標を持つ両地点にLS8H Transit APIを優先して使用しなければならない（MUST）。
 
 #### Scenario: 未知のProviderを指定する
 
@@ -82,6 +96,11 @@
 
 - **WHEN** `ekispert` を選択し `EKISPERT_API_KEY` が設定されていない
 - **THEN** APIはHTTP 500を返す
+
+#### Scenario: LS8H Transit APIで公共交通を検索する
+
+- **WHEN** `transit` または国内座標の `auto` を選択して経路を検索する
+- **THEN** バックエンドはLS8H Transit APIへ座標、日付、時刻および到着・出発種別を送る
 
 ### Requirement: 共通Route JSONを返す
 
@@ -120,6 +139,15 @@ RouteSegment:
 
 - **WHEN** Providerが通信エラーまたは不正なデータを返す
 - **THEN** APIはHTTP 502を返す
+
+### Requirement: 読める経路ラベルを表示する
+
+システムは経路区間に人が読める路線名または路線記号を表示しなければならない（MUST）。数字だけのProvider内部識別子を路線名として表示してはならない（MUST NOT）。
+
+#### Scenario: 数字だけの路線識別子を受け取る
+
+- **WHEN** Providerが数字だけの区間ラベルを返す
+- **THEN** システムはそれを表示せず、利用可能な読める路線名または交通種別を表示する
 
 ### Requirement: 経路結果を登録前に表示する
 

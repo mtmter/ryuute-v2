@@ -58,7 +58,7 @@ travelBlocks/{travelBlockId}
 - `routes_service.py`: Provider選択、retry、fallback、HTTP向けエラー変換
 - `route_providers/types.py`: Provider共通のリクエスト、結果、エラー分類
 - `route_providers/mock_provider.py`: 外部通信なしの固定共通Route
-- `route_providers/transit_provider.py`: TransitousへのHTTPリクエストと変換
+- `route_providers/transit_provider.py`: LS8H Transit APIへのHTTPリクエストと共通経路形式への変換
 - `route_providers/google_provider.py`: Google RoutesへのHTTPリクエストと変換
 - `route_providers/ekispert_provider.py`: 駅すぱあとへのHTTPリクエストと変換
 

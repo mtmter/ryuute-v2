@@ -82,7 +82,7 @@ function RouteSearchResult({
         <div className="route-source-summary">
           <strong>
             {route.provider === "transit"
-              ? "Transit APIによる非公式情報"
+              ? "LS8H Transit APIによる非公式情報"
               : route.provider === "google" && route.route_kind === "walk"
                 ? "Google徒歩ルート"
                 : `経路提供元: ${route.provider}`}

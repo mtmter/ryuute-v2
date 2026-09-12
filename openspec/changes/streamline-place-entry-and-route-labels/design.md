@@ -1,6 +1,6 @@
 ## Context
 
-See proposal.md. 予定は既に `location_name`、`destination`、`destination_place_id`、`destination_lat`、`destination_lng` を保存する。Transitousは座標で検索できるが、任意文字列は検索できない。現在は同じ場所を二つの編集欄へ持ち、座標不足の検索がバックエンドへ到達してGoogle Routes未設定の失敗になる。
+See proposal.md. 予定は既に `location_name`、`destination`、`destination_place_id`、`destination_lat`、`destination_lng` を保存する。LS8H Transit APIは座標で検索できるが、任意文字列は検索できない。現在は同じ場所を二つの編集欄へ持ち、座標不足の検索がバックエンドへ到達してGoogle Routes未設定の失敗になる。
 
 ## Goals / Non-Goals
 
@@ -18,7 +18,7 @@ See proposal.md. 予定は既に `location_name`、`destination`、`destination_
 
 1. 新規・編集予定は候補入力を唯一の場所編集面とし、候補選択時に名称を `location_name`、住所を `destination` へ保存する。自由入力は名称として保存し、住所・座標・Place IDを空にする。既存フィールドとGoogle Calendar由来の予定を読み替えることで移行を不要にする。
 2. 経路検索の各入口で、予定地点と入力地点の両方に座標があることを確認する。満たさない場合はボタンを無効化またはフォーム内エラーにして、fetchを行わない。バックエンドの既存互換文字列解決は残す。
-3. Transitousの区間名は数字だけの `displayName` を採用せず、数字だけでない `routeLongName`、`routeShortName`、`displayName` の順で選ぶ。どれも読めない場合は共通の交通種別を使う。
+3. LS8H Transit APIの区間名は数字だけの `routeName` を採用せず、数字だけでない `routeName`、`headsign`、`mode` の順で選ぶ。どれも読めない場合は共通の交通種別を使う。
 
 ## Risks / Trade-offs
 

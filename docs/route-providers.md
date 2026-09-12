@@ -12,28 +12,27 @@ FastAPI、フロントエンド、Firestoreへ渡しません。
 | 値 | 動作 |
 | --- | --- |
 | `auto` | 座標と失敗分類に応じてProviderを切り替える |
-| `transit` | Transitousの公共交通だけを検索する |
+| `transit` | LS8H Transit APIの公共交通だけを検索する |
 | `google` | Google Routesの公共交通だけを検索する |
 | `ekispert` | 駅すぱあとだけを検索する |
 | `mock` | 外部通信なしの固定共通Routeを返す |
 
-`auto` は両端が日本の座標範囲内ならTransitous、Google徒歩の順、それ以外または
+`auto` は両端が日本の座標範囲内ならLS8H Transit API、Google徒歩の順、それ以外または
 座標不足ならGoogle公共交通、Google徒歩の順です。駅すぱあとは自動選択しません。
 fallbackするのは対象外・経路なし・timeout・rate limit・server errorです。
-Transitousのtimeout、429、5xxは1回だけ再試行します。
+LS8H Transit APIのtimeout、429、5xxは1回だけ再試行します。
 
-## Transitous
+## LS8H Transit API
 
-`TRANSIT_API_URL`（既定 `https://api.transitous.org/api/v1/plan`）を7秒timeoutで
-呼び出します。`fromPlace`、`toPlace`、ISO 8601の `time`、`arriveBy`、
-`detailedTransfers=false`、`numItineraries=1` を送ります。
+`LS8H_TRANSIT_API_URL`（既定 `https://api.transit.ls8h.com/api/v1/plan`）を7秒timeoutで
+呼び出します。座標を `geo:<緯度>,<経度>` として `from` と `to` に送り、`date`（`YYYYMMDD`）、
+`time`、`type`（`departure` または `arrival`）、`numItineraries=1` を送ります。
 
-公開サービスの利用方針に従い、連絡先を含む `TRANSIT_USER_AGENT` を本番環境で
-必ず設定してください。レスポンスのISO日時に加え、`serviceDate` と0時からの秒数
-で表された時刻も変換します。86400以上の値は翌日以降として扱います。秒数形式の
-timezoneは `TRANSIT_TIMEZONE`（既定 `Asia/Tokyo`）です。
+LS8Hはレスポンスの `date` と `timezone`、および同日の0時からの秒数である
+`departureSecs`／`arrivalSecs` を返します。86400以上の値は翌日以降として扱います。
+公共交通区間の表示名には `routeName` を優先し、数値だけの内部識別子は表示しません。
 
-Transitousはbest-effortの非公式情報であるため、結果と保存済み移動ブロックへ注意文を
+LS8H Transit APIはbest-effortの非公式情報であるため、結果と保存済み移動ブロックへ注意文を
 付けます。重要な移動は交通事業者の案内でも確認してください。
 
 ## Google Routes

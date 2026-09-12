@@ -126,28 +126,32 @@ class TransitProviderTest(unittest.TestCase):
         return json.loads((FIXTURES / "transit_route_demo.json").read_text())
 
     @patch("route_providers.transit_provider.httpx.get")
-    def test_arrival_search_and_iso_response(self, get):
+    def test_arrival_search_uses_ls8h_parameters(self, get):
         get.return_value = response(self.fixture())
-        result = transit_provider.search(request(), user_agent="PlanRail test")
-        self.assertEqual(get.call_args.kwargs["params"]["arriveBy"], "true")
-        self.assertEqual(get.call_args.kwargs["headers"]["User-Agent"], "PlanRail test")
+        result = transit_provider.search(request())
+        params = get.call_args.kwargs["params"]
+        self.assertEqual(params["from"], "geo:33.596,130.215")
+        self.assertEqual(params["to"], "geo:33.586,130.398")
+        self.assertEqual(params["date"], "20260825")
+        self.assertEqual(params["time"], "10:12:00")
+        self.assertEqual(params["type"], "arrival")
         self.assertEqual(result.provider, "transit")
         self.assertEqual(result.departure_at, "2026-08-25T08:54")
-        self.assertIn("非公式", result.notices[0])
+        self.assertIn("LS8H Transit API", result.notices[0])
 
     def test_service_day_seconds_support_after_midnight(self):
         data = self.fixture()
-        itinerary = data["itineraries"][0]
-        itinerary.update(serviceDate="2026-08-25", startTime=85800, endTime=90600)
-        itinerary["legs"] = [
+        journey = data["journeys"][0]
+        journey.update(departureSecs=85800, arrivalSecs=90600, durationSecs=4800)
+        journey["legs"] = [
             {
-                "mode": "BUS",
-                "serviceDate": "2026-08-25",
-                "startTime": 85800,
-                "endTime": 90600,
+                "kind": "transit",
+                "mode": "bus",
+                "departureSecs": 85800,
+                "arrivalSecs": 90600,
                 "from": {"name": "出発地"},
                 "to": {"name": "目的地"},
-                "routeShortName": "深夜バス",
+                "routeName": "深夜バス",
             }
         ]
         result = transit_provider.convert_route(data, request())
@@ -156,10 +160,8 @@ class TransitProviderTest(unittest.TestCase):
 
     def test_uses_readable_route_label_instead_of_numeric_feed_id(self):
         data = self.fixture()
-        data["itineraries"][0]["legs"][1].update(
-            displayName="30108114",
-            routeLongName="",
-            routeShortName="30108114",
+        data["journeys"][0]["legs"][1].update(
+            routeName="30108114",
             headsign="テスト行き",
         )
         result = transit_provider.convert_route(data, request())
@@ -168,7 +170,7 @@ class TransitProviderTest(unittest.TestCase):
     @patch("route_providers.transit_provider.httpx.get")
     def test_missing_route_429_timeout_and_invalid_json(self, get):
         cases = [
-            (response({"itineraries": []}), ErrorCategory.NO_ROUTE),
+            (response({"journeys": []}), ErrorCategory.NO_ROUTE),
             (response({}, 429), ErrorCategory.TRANSIENT),
             (httpx.TimeoutException("timeout"), ErrorCategory.TRANSIENT),
         ]

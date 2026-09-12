@@ -1,32 +1,18 @@
 {
-  "itineraries": [
+  "date": "20260825",
+  "type": "arrival",
+  "timezone": "Asia/Tokyo",
+  "from": {"id": "geo:33.596,130.215", "name": "出発地"},
+  "to": {"id": "geo:33.586,130.398", "name": "目的地"},
+  "journeys": [
     {
-      "duration": 3780,
-      "startTime": "2026-08-24T23:54:00Z",
-      "endTime": "2026-08-25T00:57:00Z",
+      "departureSecs": 32040,
+      "arrivalSecs": 37920,
+      "durationSecs": 5880,
       "legs": [
-        {
-          "mode": "WALK",
-          "startTime": "2026-08-24T23:54:00Z",
-          "endTime": "2026-08-24T23:59:00Z",
-          "from": {"name": "出発地"},
-          "to": {"name": "九大学研都市駅"}
-        },
-        {
-          "mode": "RAIL",
-          "startTime": "2026-08-24T23:59:00Z",
-          "endTime": "2026-08-25T00:49:00Z",
-          "from": {"name": "九大学研都市駅"},
-          "to": {"name": "天神駅"},
-          "routeShortName": "筑肥線"
-        },
-        {
-          "mode": "WALK",
-          "startTime": "2026-08-25T00:49:00Z",
-          "endTime": "2026-08-25T00:57:00Z",
-          "from": {"name": "天神駅"},
-          "to": {"name": "目的地"}
-        }
+        {"kind": "walk", "from": {"name": "出発地"}, "to": {"name": "九大学研都市駅"}, "departureSecs": 32040, "arrivalSecs": 32340},
+        {"kind": "transit", "routeName": "筑肥線", "mode": "rail", "headsign": "福岡空港", "from": {"name": "九大学研都市駅"}, "to": {"name": "天神駅"}, "departureSecs": 32340, "arrivalSecs": 37340},
+        {"kind": "walk", "from": {"name": "天神駅"}, "to": {"name": "目的地"}, "departureSecs": 37340, "arrivalSecs": 37920}
       ]
     }
   ]
