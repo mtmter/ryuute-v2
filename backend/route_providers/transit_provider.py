@@ -10,7 +10,7 @@ from .types import ErrorCategory, ProviderError, RouteRequest, RouteResult, Rout
 
 
 DEFAULT_API_URL = "https://api.transit.ls8h.com/api/v1/plan"
-REQUEST_TIMEOUT_SECONDS = 7.0
+REQUEST_TIMEOUT_SECONDS = 20.0
 NOTICE = "LS8H Transit APIによる非公式経路情報です。重要な移動は交通事業者の案内も確認してください。"
 
 

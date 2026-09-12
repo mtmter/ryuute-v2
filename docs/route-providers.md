@@ -24,7 +24,7 @@ LS8H Transit APIのtimeout、429、5xxは1回だけ再試行します。
 
 ## LS8H Transit API
 
-`LS8H_TRANSIT_API_URL`（既定 `https://api.transit.ls8h.com/api/v1/plan`）を7秒timeoutで
+`LS8H_TRANSIT_API_URL`（既定 `https://api.transit.ls8h.com/api/v1/plan`）を20秒timeoutで
 呼び出します。座標を `geo:<緯度>,<経度>` として `from` と `to` に送り、`date`（`YYYYMMDD`）、
 `time`、`type`（`departure` または `arrival`）、`numItineraries=1` を送ります。
 
