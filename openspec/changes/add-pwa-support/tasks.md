@@ -1,7 +1,7 @@
 ## 1. Manifest and Assets
 
 - [ ] 1.1 Add `vite-plugin-pwa` and configure a Japanese manifest, standalone scope/start URL and theme colors, and verify the production build emits a valid manifest.
-- [ ] 1.2 Add 192px, 512px, maskable and Apple touch icons based on the Ryuute mark, and verify referenced files exist with correct dimensions.
+- [ ] 1.2 Add 192px, 512px, maskable and Apple touch icons based on the PlanRail mark, and verify referenced files exist with correct dimensions.
 
 ## 2. Service Worker Behavior
 

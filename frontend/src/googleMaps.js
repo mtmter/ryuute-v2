@@ -17,7 +17,7 @@ export function loadGoogleMaps() {
   }
 
   googleMapsLoadPromise = new Promise((resolve, reject) => {
-    const callbackName = "__ryuuteGoogleMapsReady";
+    const callbackName = "__planRailGoogleMapsReady";
     const script = document.createElement("script");
     const query = new URLSearchParams({
       key: apiKey,

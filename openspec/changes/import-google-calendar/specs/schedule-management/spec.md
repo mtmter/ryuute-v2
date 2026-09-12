@@ -14,7 +14,7 @@
 - **WHEN** 利用者がGoogle予定のtitle、開始・終了、description、source locationを編集しようとする
 - **THEN** システムは入力を読み取り専用として表示する
 
-#### Scenario: Ryuute情報を編集する
+#### Scenario: PlanRail情報を編集する
 
 - **WHEN** 利用者がGoogle予定の到着余裕、場所補足、準備または移動予定を編集する
-- **THEN** システムはRyuute側のdataだけを保存する
+- **THEN** システムはPlanRail側のdataだけを保存する

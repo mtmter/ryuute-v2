@@ -54,6 +54,8 @@ import {
 
 const API_BASE_URL = import.meta.env.VITE_BACKEND_API_BASE_URL;
 const PREPARATION_REMINDER_STORAGE_KEY =
+  "planrail_preparation_reminder_minutes";
+const LEGACY_PREPARATION_REMINDER_STORAGE_KEY =
   "ryuute_preparation_reminder_minutes";
 const DEFAULT_PREPARATION_REMINDER_MINUTES = 3 * 24 * 60;
 const PREPARATION_REMINDER_OPTIONS = [
@@ -66,16 +68,27 @@ const PREPARATION_REMINDER_OPTIONS = [
 
 function getInitialPreparationReminderMinutes() {
   try {
+    const currentValue = window.localStorage.getItem(
+      PREPARATION_REMINDER_STORAGE_KEY,
+    );
     const savedValue = Number(
-      window.localStorage.getItem(PREPARATION_REMINDER_STORAGE_KEY),
+      currentValue ??
+        window.localStorage.getItem(LEGACY_PREPARATION_REMINDER_STORAGE_KEY),
     );
     const isValidValue = PREPARATION_REMINDER_OPTIONS.some(
       (option) => option.minutes === savedValue,
     );
 
-    return isValidValue
-      ? savedValue
-      : DEFAULT_PREPARATION_REMINDER_MINUTES;
+    if (!isValidValue) {
+      return DEFAULT_PREPARATION_REMINDER_MINUTES;
+    }
+    if (currentValue === null) {
+      window.localStorage.setItem(
+        PREPARATION_REMINDER_STORAGE_KEY,
+        String(savedValue),
+      );
+    }
+    return savedValue;
   } catch {
     return DEFAULT_PREPARATION_REMINDER_MINUTES;
   }
@@ -793,9 +806,9 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
       <header className="app-header">
         <div className="app-brand">
           <span className="app-logo" aria-hidden="true">
-            竜
+            P
           </span>
-          <h1>Ryuute</h1>
+          <h1>PlanRail</h1>
         </div>
 
         <div className="header-calendar-controls">
@@ -1181,9 +1194,9 @@ function App() {
       <main className="auth-screen">
         <section className="auth-card" aria-labelledby="login-title">
           <span className="app-logo" aria-hidden="true">
-            竜
+            P
           </span>
-          <h1 id="login-title">Ryuute</h1>
+          <h1 id="login-title">PlanRail</h1>
           <p>予定とタスクをまとめて管理するスケジュール帳</p>
           {authErrorMessage && (
             <p className="auth-error-message" role="alert">

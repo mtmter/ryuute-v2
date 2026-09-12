@@ -67,7 +67,12 @@
 #### Scenario: 通知期間を変更する
 
 - **WHEN** ユーザーが通知期間を選択する
-- **THEN** システムは選択値を `ryuute_preparation_reminder_minutes` としてlocalStorageへ保存する
+- **THEN** システムは選択値を `planrail_preparation_reminder_minutes` としてlocalStorageへ保存する
+
+#### Scenario: 旧名称の通知期間設定を移行する
+
+- **WHEN** `planrail_preparation_reminder_minutes` がなく、旧キー `ryuute_preparation_reminder_minutes` に有効な値がある
+- **THEN** システムはその値を読み込んでPlanRailの設定として使用し、新しいキーへ保存する
 
 #### Scenario: 保存値がないまたは不正である
 

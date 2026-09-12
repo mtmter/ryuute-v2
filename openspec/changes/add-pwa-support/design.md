@@ -19,7 +19,7 @@ The Vite frontend has no manifest or service worker and is deployed over HTTPS o
 1. Use `vite-plugin-pwa` in generate-service-worker mode with an explicit manifest. Generate hashed precache entries only for build output and use a navigation fallback to the app shell.
 2. Define no runtime caching routes for Firestore, Google, Transit or the backend. Observe `navigator.onLine` to disable network actions and display a persistent offline banner.
 3. Register with prompt-style updates. Show an in-app update banner when a worker is waiting; activate it only after the user confirms, avoiding mid-edit reloads.
-4. Supply 192px, 512px and maskable PNG icons based on the existing Ryuute mark, plus an Apple touch icon. Set Japanese name/description, `display: standalone`, root scope/start URL and matching theme/background colors.
+4. Supply 192px, 512px and maskable PNG icons based on the PlanRail mark, plus an Apple touch icon. Set Japanese name/description, `display: standalone`, root scope/start URL and matching theme/background colors.
 5. Keep install UI minimal: show an install action only when `beforeinstallprompt` is available and provide short iOS home-screen guidance in the account/settings area.
 
 ## Risks / Trade-offs

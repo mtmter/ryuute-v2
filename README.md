@@ -1,6 +1,6 @@
-# Ryuute
+# PlanRail
 
-Ryuuteは、予定、移動、準備項目をまとめて管理するWebスケジュール帳です。複数目的地を含む旅行はTripとしてグループ化できます。
+PlanRailは、予定、移動、準備項目をまとめて管理するWebスケジュール帳です。複数目的地を含む旅行はTripとしてグループ化できます。
 
 Googleアカウントでログインすると、ユーザーごとのデータをCloud Firestoreへ保存します。予定に場所を設定すると、Google Mapsで場所を開いたり、FastAPIバックエンドを通じて行き・帰りの経路を検索したりできます。検索結果と手動登録した予約済み交通は移動ブロックとしてカレンダーへ表示されます。
 
@@ -37,6 +37,8 @@ Googleアカウントでログインすると、ユーザーごとのデータ�
 - [現行OpenSpec](openspec/specs/)
 
 ## 本番環境
+
+サービスの表示名はPlanRailです。既存のVercelプロジェクト名と公開URLは運用上の互換性のため従来の `ryuute-v2` のままです。
 
 - フロントエンド: [https://ryuute-v2-frontend.vercel.app](https://ryuute-v2-frontend.vercel.app)
 - バックエンド・ヘルスチェック: [https://ryuute-v2-backend.vercel.app/api/health](https://ryuute-v2-backend.vercel.app/api/health)

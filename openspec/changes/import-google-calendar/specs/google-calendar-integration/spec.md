@@ -1,6 +1,6 @@
 ## Purpose
 
-Google Calendarの予定を再入力せずRyuuteへ読み取り専用で同期し、予定ごとにRyuute固有の移動・準備情報を安全に付加する挙動を定義する。
+Google Calendarの予定を再入力せずPlanRailへ読み取り専用で同期し、予定ごとにPlanRail固有の移動・準備情報を安全に付加する挙動を定義する。
 
 ## ADDED Requirements
 
@@ -46,11 +46,11 @@ Google Calendarの予定を再入力せずRyuuteへ読み取り専用で同期�
 - **WHEN** Google CalendarがHTTP 410を返す
 - **THEN** システムは該当calendarのtokenを破棄して全同期をやり直す
 
-### Requirement: 取消予定のRyuute情報を保持する
+### Requirement: 取消予定のPlanRail情報を保持する
 
 Google側で取消・削除された予定はcalendar表示から除外し、関連する準備項目と移動予定は自動削除してはならない（MUST NOT）。
 
 #### Scenario: Google予定が取り消される
 
 - **WHEN** 差分同期が取消予定を受信する
-- **THEN** システムは予定を非表示状態に更新し、関連するRyuute dataを保持する
+- **THEN** システムは予定を非表示状態に更新し、関連するPlanRail dataを保持する

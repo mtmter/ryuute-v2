@@ -1,6 +1,6 @@
 ## Why
 
-再設計後のRyuuteをPC・スマートフォンのhome画面から起動できるappとして提供する。データ同期はonline前提のまま、静的app shellだけを安全にcacheし、古い予定を最新と誤認させない。
+再設計後のPlanRailをPC・スマートフォンのhome画面から起動できるappとして提供する。データ同期はonline前提のまま、静的app shellだけを安全にcacheし、古い予定を最新と誤認させない。
 
 ## What Changes
 

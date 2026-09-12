@@ -1,6 +1,6 @@
 ## Purpose
 
-Ryuuteを対応browserのhome画面へinstallしてappらしく起動しつつ、online必須dataを古いcacheと誤認させないPWA動作を定義する。
+PlanRailを対応browserのhome画面へinstallしてappらしく起動しつつ、online必須dataを古いcacheと誤認させないPWA動作を定義する。
 
 ## ADDED Requirements
 
@@ -11,7 +11,7 @@ Ryuuteを対応browserのhome画面へinstallしてappらしく起動しつつ�
 #### Scenario: 対応browserで開く
 
 - **WHEN** 利用者がHTTPS上のappを対応browserで開く
-- **THEN** browserはRyuuteをinstall可能なweb appとして認識する
+- **THEN** browserはPlanRailをinstall可能なweb appとして認識する
 
 ### Requirement: 静的app shellだけをoffline cacheする
 
