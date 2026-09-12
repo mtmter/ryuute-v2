@@ -265,7 +265,7 @@ function AddItemModal({ initialValues, onClose, onSubmit, trips = [] }) {
 
               <div className="modal-form-field">
                 <label htmlFor="event-location-name">
-                  場所名 <span>任意</span>
+                  場所 <span>任意</span>
                 </label>
                 <PlaceAutocompleteInput
                   id="event-location-name"
@@ -274,6 +274,7 @@ function AddItemModal({ initialValues, onClose, onSubmit, trips = [] }) {
                   disabled={isSubmitting}
                   onChange={(nextLocationName) => {
                     setLocationName(nextLocationName);
+                    setDestination("");
                     setSelectedPlace(null);
                   }}
                   onPlaceSelect={(place) => {
@@ -282,22 +283,6 @@ function AddItemModal({ initialValues, onClose, onSubmit, trips = [] }) {
                       setLocationName(place.name);
                       setDestination(place.address);
                     }
-                  }}
-                />
-              </div>
-
-              <div className="modal-form-field">
-                <label htmlFor="event-destination">
-                  目的地 <span>任意</span>
-                </label>
-                <input
-                  id="event-destination"
-                  type="text"
-                  value={destination}
-                  placeholder="住所・駅名・施設名"
-                  onChange={(event) => {
-                    setDestination(event.target.value);
-                    setSelectedPlace(null);
                   }}
                 />
               </div>

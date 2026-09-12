@@ -16,6 +16,10 @@ export function getPlaceLabel(place) {
   );
 }
 
+export function hasPlaceCoordinates(place) {
+  return Boolean(place && typeof place === "object" && place.lat != null && place.lng != null);
+}
+
 export function normalizePlace(value, fallbackName = "") {
   if (value && typeof value === "object") {
     return {

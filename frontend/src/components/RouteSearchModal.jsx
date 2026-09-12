@@ -2,6 +2,7 @@ import { useState } from "react";
 import { WEEKDAY_NAMES, parseDateTime, toDateTimeInputValue } from "../dateUtils";
 import PlaceAutocompleteInput from "./PlaceAutocompleteInput";
 import RouteSearchResult from "./RouteSearchResult";
+import { hasPlaceCoordinates } from "../travelUtils";
 
 function routeTiming(event, direction) {
   if (direction === "outbound") {
@@ -51,6 +52,10 @@ function RouteSearchModal({ direction, event, initialRouteResult, onBack, onBusy
     submitEvent.preventDefault();
     if (!placeText.trim()) {
       setErrorMessage(isOutbound ? "目的地を入力してください" : "出発地を入力してください");
+      return;
+    }
+    if (!selectedPlace || !hasPlaceCoordinates(selectedPlace) || !hasPlaceCoordinates({ lat: event.destination_lat, lng: event.destination_lng })) {
+      setErrorMessage("経路検索には、予定と検索地点の両方をPlaces候補から選択する必要があります。");
       return;
     }
     setIsSearching(true);

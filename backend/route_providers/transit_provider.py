@@ -112,7 +112,7 @@ def _convert_leg(leg, service_date, timezone_info, request, index, leg_count):
     if not from_name or not to_name:
         raise ProviderError(ErrorCategory.INVALID_RESPONSE, "Transit APIの区間地点が不足しています", provider="transit")
     is_walk = mode.upper() in {"WALK", "FOOT"}
-    line_name = None if is_walk else leg.get("displayName") or leg.get("routeLongName") or leg.get("routeShortName") or mode
+    line_name = None if is_walk else _display_route_name(leg)
     return RouteSegment(
         type="WALK" if is_walk else "TRANSIT",
         from_name=from_name,
@@ -122,6 +122,13 @@ def _convert_leg(leg, service_date, timezone_info, request, index, leg_count):
         duration_minutes=math.ceil((arrival - departure).total_seconds() / 60),
         line_name=line_name,
     )
+
+
+def _display_route_name(leg):
+    for value in (leg.get("routeLongName"), leg.get("routeShortName"), leg.get("displayName")):
+        if isinstance(value, str) and value.strip() and not value.strip().isdigit():
+            return value.strip()
+    return None
 
 
 def _parse_service_time(value, service_date, timezone_info):

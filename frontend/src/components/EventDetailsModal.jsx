@@ -5,6 +5,7 @@ import PlaceAutocompleteInput from "./PlaceAutocompleteInput";
 import PreparationChecklist from "./PreparationChecklist";
 import RouteSearchModal from "./RouteSearchModal";
 import TravelPlanDetails from "./TravelPlanDetails";
+import { hasPlaceCoordinates } from "../travelUtils";
 
 function formatEventDateTime(value) {
   const date = parseDateTime(value);
@@ -93,7 +94,7 @@ function EventDetailsModal({
   const [endAt, setEndAt] = useState(event.end_at ?? "");
   const [description, setDescription] = useState(event.description ?? "");
   const [locationName, setLocationName] = useState(
-    event.location_name ?? "",
+    event.location_name ?? event.destination ?? "",
   );
   const [destination, setDestination] = useState(event.destination ?? "");
   const [selectedPlace, setSelectedPlace] = useState(() =>
@@ -123,12 +124,7 @@ function EventDetailsModal({
       : event.destination_place_id
         ? "Google Mapsで場所を表示"
         : "未設定");
-  const canSearchRoute = Boolean(
-    event.destination ||
-      event.location_name ||
-      (hasCoordinateValue(event.destination_lat) &&
-        hasCoordinateValue(event.destination_lng)),
-  );
+  const canSearchRoute = hasPlaceCoordinates({ lat: event.destination_lat, lng: event.destination_lng });
 
   useEffect(() => {
     function handleKeyDown(keyEvent) {
@@ -364,7 +360,7 @@ function EventDetailsModal({
 
             <div className="modal-form-field">
               <label htmlFor="edit-event-location-name">
-                場所名 <span>任意</span>
+                場所 <span>任意</span>
               </label>
               {isGoogleEvent ? (
                 <input id="edit-event-location-name" value={locationName} readOnly />
@@ -376,6 +372,7 @@ function EventDetailsModal({
                   disabled={isBusy}
                   onChange={(nextLocationName) => {
                     setLocationName(nextLocationName);
+                    setDestination("");
                     setSelectedPlace(null);
                   }}
                   onPlaceSelect={(place) => {
@@ -387,21 +384,6 @@ function EventDetailsModal({
                   }}
                 />
               )}
-            </div>
-
-            <div className="modal-form-field">
-              <label htmlFor="edit-event-destination">
-                目的地 <span>任意</span>
-              </label>
-              <input
-                id="edit-event-destination"
-                type="text"
-                value={destination}
-                onChange={(inputEvent) => {
-                  setDestination(inputEvent.target.value);
-                  setSelectedPlace(null);
-                }}
-              />
             </div>
 
             <div className="modal-form-field">
@@ -563,7 +545,7 @@ function EventDetailsModal({
               <section className="travel-plan-section">
                 <h3>移動予定</h3>
                 <p className="travel-plan-empty">
-                  経路検索には予定の目的地が必要です
+                  経路検索にはPlaces候補から選択した場所が必要です
                 </p>
               </section>
             )}

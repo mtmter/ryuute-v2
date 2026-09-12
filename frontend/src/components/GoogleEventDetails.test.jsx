@@ -33,7 +33,6 @@ describe("imported Google event details", () => {
     fireEvent.click(screen.getByRole("button", { name: "編集" }));
     expect(screen.getByLabelText("予定タイトル").readOnly).toBe(true);
     expect(screen.getByLabelText("説明 任意").readOnly).toBe(true);
-    expect(screen.getByLabelText("場所名 任意").readOnly).toBe(true);
-    expect(screen.getByLabelText("目的地 任意").readOnly).toBe(false);
+    expect(screen.getByLabelText("場所 任意").readOnly).toBe(true);
   });
 });

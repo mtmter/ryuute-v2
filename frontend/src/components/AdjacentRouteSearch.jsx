@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getPlaceLabel } from "../travelUtils";
+import { getPlaceLabel, hasPlaceCoordinates } from "../travelUtils";
 import PlaceAutocompleteInput from "./PlaceAutocompleteInput";
 import RouteSearchResult from "./RouteSearchResult";
 
@@ -39,6 +39,11 @@ function AdjacentRouteSearch({ anchor, direction, onBack, onRegister, onSearch }
     event.preventDefault();
     if (!placeText.trim()) {
       setErrorMessage(isBefore ? "前区間の出発地を入力してください" : "後区間の目的地を入力してください");
+      return;
+    }
+    const anchorPlace = isBefore ? anchor.destination : anchor.origin;
+    if (!selectedPlace || !hasPlaceCoordinates(selectedPlace) || !hasPlaceCoordinates(anchorPlace)) {
+      setErrorMessage("経路検索には、両方の地点をPlaces候補から選択する必要があります。");
       return;
     }
     setIsBusy(true);

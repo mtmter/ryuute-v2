@@ -154,6 +154,16 @@ class TransitProviderTest(unittest.TestCase):
         self.assertEqual(result.departure_at, "2026-08-25T23:50")
         self.assertEqual(result.arrival_at, "2026-08-26T01:10")
 
+    def test_uses_readable_route_label_instead_of_numeric_feed_id(self):
+        data = self.fixture()
+        data["itineraries"][0]["legs"][1].update(
+            displayName="30108114",
+            routeLongName="テスト線",
+            routeShortName="T",
+        )
+        result = transit_provider.convert_route(data, request())
+        self.assertEqual(result.segments[1].line_name, "テスト線")
+
     @patch("route_providers.transit_provider.httpx.get")
     def test_missing_route_429_timeout_and_invalid_json(self, get):
         cases = [
