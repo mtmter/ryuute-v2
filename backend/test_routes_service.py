@@ -158,11 +158,12 @@ class TransitProviderTest(unittest.TestCase):
         data = self.fixture()
         data["itineraries"][0]["legs"][1].update(
             displayName="30108114",
-            routeLongName="テスト線",
-            routeShortName="T",
+            routeLongName="",
+            routeShortName="30108114",
+            headsign="テスト行き",
         )
         result = transit_provider.convert_route(data, request())
-        self.assertEqual(result.segments[1].line_name, "テスト線")
+        self.assertEqual(result.segments[1].line_name, "テスト行き")
 
     @patch("route_providers.transit_provider.httpx.get")
     def test_missing_route_429_timeout_and_invalid_json(self, get):

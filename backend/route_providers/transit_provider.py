@@ -128,6 +128,12 @@ def _display_route_name(leg):
     for value in (leg.get("routeLongName"), leg.get("routeShortName"), leg.get("displayName")):
         if isinstance(value, str) and value.strip() and not value.strip().isdigit():
             return value.strip()
+    headsign = leg.get("headsign")
+    agency_name = leg.get("agencyName")
+    if isinstance(headsign, str) and headsign.strip():
+        return headsign.strip()
+    if isinstance(agency_name, str) and agency_name.strip():
+        return agency_name.strip()
     return None
 
 
