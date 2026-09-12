@@ -20,20 +20,28 @@ class EkispertApiKeyError(EkispertProviderError):
     """駅すぱあとAPIのアクセスキーが設定されていない。"""
 
 
-def get_route(origin, destination, arrival_at, api_key=None):
-    """駅すぱあとAPIで到着時刻を指定して経路を1件取得する。"""
+def get_route(
+    origin,
+    destination,
+    requested_at,
+    api_key=None,
+    time_type="arrival",
+):
+    """駅すぱあとAPIで出発または到着時刻を指定して経路を取得する。"""
     ekispert_api_key = api_key or os.getenv("EKISPERT_API_KEY")
     if not ekispert_api_key:
         raise EkispertApiKeyError("EKISPERT_API_KEYが設定されていません")
 
-    arrival_datetime = _as_japan_datetime(arrival_at)
+    if time_type not in {"arrival", "departure"}:
+        raise EkispertProviderError("検索時刻種別が不正です")
+    requested_datetime = _as_japan_datetime(requested_at)
     query_parameters = {
         "key": ekispert_api_key,
         "viaList": f"{origin}:{destination}",
         "gcs": "wgs84",
-        "date": arrival_datetime.strftime("%Y%m%d"),
-        "time": arrival_datetime.strftime("%H%M"),
-        "searchType": "arrival",
+        "date": requested_datetime.strftime("%Y%m%d"),
+        "time": requested_datetime.strftime("%H%M"),
+        "searchType": time_type,
         "answerCount": "1",
         "sort": "ekispert",
     }
@@ -78,7 +86,7 @@ def get_route(origin, destination, arrival_at, api_key=None):
 
 def _as_japan_datetime(value):
     if not isinstance(value, datetime):
-        raise EkispertProviderError("到着希望日時がdatetimeではありません")
+        raise EkispertProviderError("検索日時がdatetimeではありません")
 
     if value.tzinfo is None:
         return value.replace(tzinfo=JAPAN_TIMEZONE)

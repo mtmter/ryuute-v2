@@ -78,6 +78,22 @@ function RouteSearchResult({
         <p className="route-destination-label">目的地：{route.destination}</p>
       </div>
 
+      {route.provider && (
+        <div className="route-source-summary">
+          <strong>
+            {route.provider === "transit"
+              ? "Transit APIによる非公式情報"
+              : route.provider === "google" && route.route_kind === "walk"
+                ? "Google徒歩ルート"
+                : `経路提供元: ${route.provider}`}
+          </strong>
+          {route.is_fallback && <span>代替経路として検索されました</span>}
+          {(route.notices ?? []).map((notice) => (
+            <span key={notice}>{notice}</span>
+          ))}
+        </div>
+      )}
+
       {errorMessage && (
         <p className="modal-error-message" role="alert">
           {errorMessage}

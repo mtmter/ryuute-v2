@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import AddItemModal from "./components/AddItemModal";
 import AccountMenu from "./components/AccountMenu";
@@ -11,20 +11,28 @@ import PreparationReminderList from "./components/PreparationReminderList";
 import PreparationReminderSettingsModal from "./components/PreparationReminderSettingsModal";
 import TaskDetailsModal from "./components/TaskDetailsModal";
 import TaskList from "./components/TaskList";
+import TravelBlockDetailsModal from "./components/TravelBlockDetailsModal";
+import TripDetailsModal from "./components/TripDetailsModal";
+import TripList from "./components/TripList";
 import WeekCalendar from "./components/WeekCalendar";
 import useAuth from "./auth/useAuth";
 import {
   createEvent as createFirestoreEvent,
   createPreparation as createFirestorePreparation,
+  createTravelBlock as createFirestoreTravelBlock,
+  createTrip as createFirestoreTrip,
+  createTripFromEvent as createFirestoreTripFromEvent,
   createTask as createFirestoreTask,
   deleteEvent as deleteFirestoreEvent,
   deletePreparation as deleteFirestorePreparation,
+  deleteTravelBlock as deleteFirestoreTravelBlock,
+  deleteTrip as deleteFirestoreTrip,
   deleteTask as deleteFirestoreTask,
-  getTravelPlan as getFirestoreTravelPlan,
   loadScheduleData,
-  saveTravelPlan as saveFirestoreTravelPlan,
   updateEvent as updateFirestoreEvent,
   updatePreparation as updateFirestorePreparation,
+  updateTravelBlock as updateFirestoreTravelBlock,
+  updateTrip as updateFirestoreTrip,
   updateTask as updateFirestoreTask,
 } from "./firestoreService";
 import {
@@ -38,6 +46,11 @@ import {
   parseDateTime,
   toDateTimeInputValue,
 } from "./dateUtils";
+import {
+  eventToPlace,
+  routeToTravelBlock,
+  visibleCalendarEvents,
+} from "./travelUtils";
 
 const API_BASE_URL = import.meta.env.VITE_BACKEND_API_BASE_URL;
 const PREPARATION_REMINDER_STORAGE_KEY =
@@ -197,6 +210,8 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
   const [events, setEvents] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [preparations, setPreparations] = useState(null);
+  const [trips, setTrips] = useState([]);
+  const [travelBlocks, setTravelBlocks] = useState([]);
   const [errorMessage, setErrorMessage] = useState("");
   const [preparationErrorMessage, setPreparationErrorMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -204,6 +219,8 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
   const [addModalValues, setAddModalValues] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [selectedTask, setSelectedTask] = useState(null);
+  const [selectedTrip, setSelectedTrip] = useState(null);
+  const [selectedTravelBlock, setSelectedTravelBlock] = useState(null);
   const [routeSearchResult, setRouteSearchResult] = useState(null);
   const [isReminderSettingsOpen, setIsReminderSettingsOpen] = useState(false);
   const [preparationReminderMinutes, setPreparationReminderMinutes] = useState(
@@ -218,6 +235,8 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
         setEvents(scheduleData.events);
         setTasks(scheduleData.tasks);
         setPreparations(scheduleData.preparations);
+        setTrips(scheduleData.trips);
+        setTravelBlocks(scheduleData.travelBlocks);
         setPreparationErrorMessage(
           scheduleData.preparations === null
             ? "準備項目を取得できなかったため、準備案内を表示できません"
@@ -298,6 +317,8 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
       setEvents(scheduleData.events);
       setTasks(scheduleData.tasks);
       setPreparations(scheduleData.preparations);
+      setTrips(scheduleData.trips);
+      setTravelBlocks(scheduleData.travelBlocks);
       setPreparationErrorMessage(
         scheduleData.preparations === null
           ? "準備項目を取得できなかったため、準備案内を表示できません"
@@ -367,6 +388,11 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
   function handleAddButtonClick() {
     const today = new Date();
 
+    if (activeView === "trips") {
+      setAddModalValues(createInitialValues(today, "trip"));
+      return;
+    }
+
     if (activeView === "tasks") {
       setAddModalValues(createInitialValues(today, "task", 9 * 60, null));
       return;
@@ -406,12 +432,22 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
   }
 
   async function handleCreateItem(itemType, itemData) {
-    const createdItem =
-      itemType === "event"
-        ? await createFirestoreEvent(user.uid, itemData)
-        : await createFirestoreTask(user.uid, itemData);
+    let createdItem;
+    if (itemType === "event") {
+      createdItem = await createFirestoreEvent(user.uid, itemData);
+    } else if (itemType === "travel") {
+      createdItem = await createFirestoreTravelBlock(user.uid, itemData);
+    } else if (itemType === "trip") {
+      createdItem = await createFirestoreTrip(user.uid, itemData);
+    } else {
+      createdItem = await createFirestoreTask(user.uid, itemData);
+    }
     if (itemType === "event") {
       setEvents((currentEvents) => [...currentEvents, createdItem]);
+    } else if (itemType === "travel") {
+      setTravelBlocks((currentBlocks) => [...currentBlocks, createdItem]);
+    } else if (itemType === "trip") {
+      setTrips((currentTrips) => [...currentTrips, createdItem]);
     } else {
       setTasks((currentTasks) => [...currentTasks, createdItem]);
     }
@@ -419,6 +455,20 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
   }
 
   async function handleUpdateEvent(eventId, eventData) {
+    const previousEvent = events.find((event) => event.id === eventId);
+    const routeFields = [
+      "start_at",
+      "end_at",
+      "location_name",
+      "destination",
+      "destination_place_id",
+      "destination_lat",
+      "destination_lng",
+      "arrival_buffer_minutes",
+    ];
+    const routeFieldsChanged = routeFields.some(
+      (field) => previousEvent?.[field] !== eventData[field],
+    );
     const updatedEvent = await updateFirestoreEvent(
       user.uid,
       eventId,
@@ -430,11 +480,24 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
       ),
     );
     setSelectedEvent(updatedEvent);
+    if (routeFieldsChanged) setTravelBlocks((currentBlocks) =>
+      currentBlocks.map((block) =>
+        block.origin_event_id === eventId || block.destination_event_id === eventId
+          ? {
+              ...block,
+              needs_review: true,
+              review_reasons: [
+                ...new Set([...(block.review_reasons ?? []), "linked_event_changed"]),
+              ],
+            }
+          : block,
+      ),
+    );
     setRouteSearchResult(null);
   }
 
-  async function handleDeleteEvent(eventId) {
-    await deleteFirestoreEvent(user.uid, eventId);
+  async function handleDeleteEvent(eventId, travelBlockAction) {
+    await deleteFirestoreEvent(user.uid, eventId, travelBlockAction);
 
     setEvents((currentEvents) =>
       currentEvents.filter((currentEvent) => currentEvent.id !== eventId),
@@ -445,13 +508,41 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
       ) ?? null,
     );
     setSelectedEvent(null);
+    setTravelBlocks((currentBlocks) =>
+      travelBlockAction === "delete"
+        ? currentBlocks.filter(
+            (block) =>
+              block.origin_event_id !== eventId &&
+              block.destination_event_id !== eventId,
+          )
+        : currentBlocks.map((block) => {
+            if (
+              block.origin_event_id !== eventId &&
+              block.destination_event_id !== eventId
+            ) return block;
+            return {
+              ...block,
+              origin_event_id:
+                block.origin_event_id === eventId ? null : block.origin_event_id,
+              destination_event_id:
+                block.destination_event_id === eventId
+                  ? null
+                  : block.destination_event_id,
+              needs_review: true,
+              review_reasons: [
+                ...new Set([...(block.review_reasons ?? []), "linked_event_deleted"]),
+              ],
+            };
+          }),
+    );
     setRouteSearchResult(null);
   }
 
-  async function handleCreatePreparation(eventId, title) {
+  async function handleCreatePreparation(ownerType, ownerId, title) {
     const createdPreparation = await createFirestorePreparation(
       user.uid,
-      eventId,
+      ownerType,
+      ownerId,
       title,
     );
     setPreparations((currentPreparations) => [
@@ -462,7 +553,8 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
   }
 
   async function handleUpdatePreparation(
-    eventId,
+    ownerType,
+    ownerId,
     preparationId,
     preparationData,
   ) {
@@ -471,7 +563,9 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
       preparationId,
       {
         ...preparationData,
-        event_id: String(eventId),
+        owner_type: ownerType,
+        event_id: ownerType === "event" ? String(ownerId) : null,
+        trip_id: ownerType === "trip" ? String(ownerId) : null,
       },
     );
     setPreparations((currentPreparations) =>
@@ -484,8 +578,13 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
     return updatedPreparation;
   }
 
-  async function handleDeletePreparation(eventId, preparationId) {
-    await deleteFirestorePreparation(user.uid, eventId, preparationId);
+  async function handleDeletePreparation(ownerType, ownerId, preparationId) {
+    await deleteFirestorePreparation(
+      user.uid,
+      ownerType,
+      ownerId,
+      preparationId,
+    );
 
     setPreparations((currentPreparations) =>
       currentPreparations?.filter(
@@ -494,7 +593,7 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
     );
   }
 
-  async function handleRouteSearch(eventId, originRequest) {
+  async function handleRouteSearch(eventId, direction, externalPlace) {
     let response;
     const event = events.find((currentEvent) => currentEvent.id === eventId);
 
@@ -502,19 +601,28 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
       throw new Error("予定が見つかりません");
     }
 
+    const eventPlace = eventToPlace(event);
+    const isOutbound = direction === "outbound";
+    const startDate = parseDateTime(event.start_at);
+    const arrivalAt = startDate
+      ? toDateTimeInputValue(
+          new Date(
+            startDate.getTime() -
+              (event.arrival_buffer_minutes ?? 0) * 60 * 1000,
+          ),
+        )
+      : event.start_at;
+
     try {
       response = await fetch(`${API_BASE_URL}/route-search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...originRequest,
-          event: {
-            start_at: event.start_at,
-            location_name: event.location_name,
-            destination: event.destination,
-            destination_lat: event.destination_lat,
-            destination_lng: event.destination_lng,
-            arrival_buffer_minutes: event.arrival_buffer_minutes,
+          origin: isOutbound ? eventPlace : externalPlace,
+          destination: isOutbound ? externalPlace : eventPlace,
+          timing: {
+            type: isOutbound ? "departure" : "arrival",
+            at: isOutbound ? event.end_at : arrivalAt,
           },
         }),
       });
@@ -539,24 +647,148 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
     return response.json();
   }
 
-  async function handleRouteRegister(eventId, route) {
-    const savedTravelPlan = await saveFirestoreTravelPlan(
+  async function handleDirectRouteSearch(request) {
+    let response;
+    try {
+      response = await fetch(`${API_BASE_URL}/route-search`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+      });
+    } catch {
+      throw new Error("経路検索サービスとの通信に失敗しました");
+    }
+    if (!response.ok) {
+      throw new Error(
+        await getResponseError(response, "経路を検索できませんでした"),
+      );
+    }
+    return response.json();
+  }
+
+  async function handleDirectRouteRegister(route, request) {
+    const saved = await createFirestoreTravelBlock(
       user.uid,
-      eventId,
-      route,
+      routeToTravelBlock(route, {
+        origin: request.origin,
+        destination: request.destination,
+        tripId: request.tripId,
+      }),
     );
+    setTravelBlocks((currentBlocks) => [...currentBlocks, saved]);
+    setSelectedTravelBlock(null);
+    return saved;
+  }
+
+  async function handleRouteRegister(eventId, direction, route, externalPlace) {
+    const event = events.find((candidate) => candidate.id === eventId);
+    if (!event) throw new Error("予定が見つかりません");
+    const isOutbound = direction === "outbound";
+    const savedTravelPlan = await createFirestoreTravelBlock(
+      user.uid,
+      routeToTravelBlock(route, {
+        origin: isOutbound ? eventToPlace(event) : externalPlace,
+        destination: isOutbound ? externalPlace : eventToPlace(event),
+        originEventId: isOutbound ? eventId : null,
+        destinationEventId: isOutbound ? null : eventId,
+        tripId: event.trip_id,
+      }),
+    );
+    setTravelBlocks((currentBlocks) => [...currentBlocks, savedTravelPlan]);
     setRouteSearchResult(null);
     return savedTravelPlan;
   }
 
-  const handleTravelPlanLoad = useCallback(
-    (eventId) => getFirestoreTravelPlan(user.uid, eventId),
-    [user.uid],
-  );
+  async function handleUpdateTravelBlock(travelBlockId, travelBlockData) {
+    const transientKeys = new Set([
+      "id",
+      "calendar_kind",
+      "position",
+      "column",
+      "columnCount",
+      "hasOverlap",
+      "leftPercent",
+      "widthPercent",
+    ]);
+    const documentData = Object.fromEntries(
+      Object.entries(travelBlockData).filter(
+        ([key]) => !transientKeys.has(key),
+      ),
+    );
+    const updated = await updateFirestoreTravelBlock(
+      user.uid,
+      travelBlockId,
+      documentData,
+    );
+    setTravelBlocks((currentBlocks) =>
+      currentBlocks.map((block) => (block.id === updated.id ? updated : block)),
+    );
+    setSelectedTravelBlock(updated);
+  }
+
+  async function handleDeleteTravelBlock(travelBlockId) {
+    await deleteFirestoreTravelBlock(user.uid, travelBlockId);
+    setTravelBlocks((currentBlocks) =>
+      currentBlocks.filter((block) => block.id !== travelBlockId),
+    );
+    setSelectedTravelBlock(null);
+  }
+
+  async function handleCreateTripFromEvent(event) {
+    const result = await createFirestoreTripFromEvent(user.uid, event);
+    setTrips((currentTrips) => [...currentTrips, result.trip]);
+    setEvents((currentEvents) =>
+      currentEvents.map((candidate) =>
+        candidate.id === result.event.id ? result.event : candidate,
+      ),
+    );
+    setSelectedEvent(result.event);
+  }
+
+  async function handleUpdateTrip(tripId, tripData) {
+    const updated = await updateFirestoreTrip(user.uid, tripId, tripData);
+    setTrips((currentTrips) =>
+      currentTrips.map((trip) => (trip.id === updated.id ? updated : trip)),
+    );
+    setSelectedTrip(updated);
+  }
+
+  async function handleDeleteTrip(tripId, childAction) {
+    const childEventIds = new Set(
+      events.filter((event) => event.trip_id === tripId).map((event) => event.id),
+    );
+    await deleteFirestoreTrip(user.uid, tripId, childAction);
+    setTrips((currentTrips) => currentTrips.filter((trip) => trip.id !== tripId));
+    if (childAction === "delete") {
+      setEvents((currentEvents) => currentEvents.filter((event) => event.trip_id !== tripId));
+      setTravelBlocks((currentBlocks) =>
+        currentBlocks.filter(
+          (block) =>
+            block.trip_id !== tripId &&
+            !childEventIds.has(block.origin_event_id) &&
+            !childEventIds.has(block.destination_event_id),
+        ),
+      );
+    } else {
+      setEvents((currentEvents) => currentEvents.map((event) => event.trip_id === tripId ? { ...event, trip_id: null, calendar_visibility: "normal" } : event));
+      setTravelBlocks((currentBlocks) => currentBlocks.map((block) => block.trip_id === tripId ? { ...block, trip_id: null } : block));
+    }
+    setPreparations(
+      (currentPreparations) =>
+        currentPreparations?.filter(
+          (item) =>
+            item.trip_id !== tripId &&
+            !(childAction === "delete" && childEventIds.has(item.event_id)),
+        ) ?? null,
+    );
+    setSelectedTrip(null);
+  }
+
+  const calendarEvents = visibleCalendarEvents(events);
 
   return (
     <div
-      className={`schedule-app${activeView !== "tasks" ? " calendar-view-active" : ""}`}
+      className={`schedule-app${["month", "week", "day"].includes(activeView) ? " calendar-view-active" : ""}`}
     >
       <header className="app-header">
         <div className="app-brand">
@@ -651,6 +883,13 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
             >
               タスク
             </button>
+            <button
+              className={activeView === "trips" ? "is-active" : ""}
+              type="button"
+              onClick={() => setActiveView("trips")}
+            >
+              Trip
+            </button>
           </nav>
           <button
             className="reminder-settings-button"
@@ -705,6 +944,8 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
             onTaskSelect={setSelectedTask}
             onTaskToggle={handleTaskToggle}
           />
+        ) : activeView === "trips" ? (
+          <TripList trips={trips} onSelect={setSelectedTrip} />
         ) : (
           <div className="calendar-page-layout">
             <aside className="calendar-sidebar" aria-label="日付と準備案内">
@@ -726,29 +967,35 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
             <div className="calendar-main-panel">
               {activeView === "month" ? (
                 <MonthCalendar
-                  events={events}
+                  events={calendarEvents}
+                  travelBlocks={travelBlocks}
                   tasks={tasks}
                   selectedDate={selectedDate}
                   onDateClick={handleMonthDateClick}
                   onEventClick={setSelectedEvent}
                   onTaskClick={setSelectedTask}
+                  onTravelBlockClick={setSelectedTravelBlock}
                 />
               ) : activeView === "week" ? (
                 <WeekCalendar
-                  events={events}
+                  events={calendarEvents}
+                  travelBlocks={travelBlocks}
                   tasks={tasks}
                   selectedDate={selectedDate}
                   onEventClick={setSelectedEvent}
                   onTaskClick={setSelectedTask}
+                  onTravelBlockClick={setSelectedTravelBlock}
                   onTimeClick={handleWeekTimeClick}
                 />
               ) : (
                 <DayCalendar
-                  events={events}
+                  events={calendarEvents}
+                  travelBlocks={travelBlocks}
                   tasks={tasks}
                   selectedDate={selectedDate}
                   onEventClick={setSelectedEvent}
                   onTaskClick={setSelectedTask}
+                  onTravelBlockClick={setSelectedTravelBlock}
                   onTimeClick={handleWeekTimeClick}
                 />
               )}
@@ -760,6 +1007,7 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
       {addModalValues && (
         <AddItemModal
           initialValues={addModalValues}
+          trips={trips}
           onClose={() => setAddModalValues(null)}
           onSubmit={handleCreateItem}
         />
@@ -783,11 +1031,19 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
           onPreparationAdd={handleCreatePreparation}
           onPreparationDelete={handleDeletePreparation}
           onPreparationUpdate={handleUpdatePreparation}
-          onTravelPlanLoad={handleTravelPlanLoad}
+          onCreateTripFromEvent={handleCreateTripFromEvent}
+          onTravelBlockSelect={(block) => {
+            setSelectedEvent(null);
+            setSelectedTravelBlock(block);
+          }}
           onRouteRegister={handleRouteRegister}
           onRouteSearch={handleRouteSearch}
-          onRouteSearchSuccess={(result) =>
-            setRouteSearchResult({ eventId: selectedEvent.id, result })
+          onRouteSearchSuccess={(direction, result) =>
+            setRouteSearchResult({
+              eventId: selectedEvent.id,
+              direction,
+              result,
+            })
           }
           onUpdate={handleUpdateEvent}
           preparations={
@@ -796,6 +1052,55 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
             ) ?? null
           }
           routeSearchResult={routeSearchResult}
+          travelBlocks={travelBlocks.filter(
+            (block) =>
+              block.origin_event_id === selectedEvent.id ||
+              block.destination_event_id === selectedEvent.id,
+          )}
+          trips={trips}
+        />
+      )}
+
+      {selectedTravelBlock && (
+        <TravelBlockDetailsModal
+          key={selectedTravelBlock.id}
+          travelBlock={selectedTravelBlock}
+          trips={trips}
+          onClose={() => setSelectedTravelBlock(null)}
+          onDelete={handleDeleteTravelBlock}
+          onDirectRouteRegister={handleDirectRouteRegister}
+          onDirectRouteSearch={handleDirectRouteSearch}
+          onUpdate={handleUpdateTravelBlock}
+        />
+      )}
+
+      {selectedTrip && (
+        <TripDetailsModal
+          key={selectedTrip.id}
+          trip={selectedTrip}
+          events={events.filter((event) => event.trip_id === selectedTrip.id)}
+          travelBlocks={travelBlocks.filter(
+            (block) => block.trip_id === selectedTrip.id,
+          )}
+          preparations={
+            preparations?.filter(
+              (preparation) => preparation.trip_id === selectedTrip.id,
+            ) ?? null
+          }
+          onClose={() => setSelectedTrip(null)}
+          onDelete={handleDeleteTrip}
+          onUpdate={handleUpdateTrip}
+          onPreparationAdd={handleCreatePreparation}
+          onPreparationDelete={handleDeletePreparation}
+          onPreparationUpdate={handleUpdatePreparation}
+          onSelectEvent={(event) => {
+            setSelectedTrip(null);
+            setSelectedEvent(event);
+          }}
+          onSelectTravelBlock={(block) => {
+            setSelectedTrip(null);
+            setSelectedTravelBlock(block);
+          }}
         />
       )}
 

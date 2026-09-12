@@ -1,75 +1,68 @@
 import { useState } from "react";
-import { WEEKDAY_NAMES, parseDateTime } from "../dateUtils";
+import { WEEKDAY_NAMES, parseDateTime, toDateTimeInputValue } from "../dateUtils";
 import PlaceAutocompleteInput from "./PlaceAutocompleteInput";
 import RouteSearchResult from "./RouteSearchResult";
 
-function formatDesiredArrival(event) {
-  const startDate = parseDateTime(event.start_at);
-
-  if (!startDate) {
-    return "未設定";
+function routeTiming(event, direction) {
+  if (direction === "outbound") {
+    return { type: "departure", at: event.end_at, label: "出発希望時刻" };
   }
-
+  const startDate = parseDateTime(event.start_at);
   const bufferMinutes = event.arrival_buffer_minutes ?? 0;
-  const desiredArrival = new Date(
-    startDate.getTime() - bufferMinutes * 60 * 1000,
-  );
-  const hour = String(desiredArrival.getHours()).padStart(2, "0");
-  const minute = String(desiredArrival.getMinutes()).padStart(2, "0");
-
-  return `${desiredArrival.getFullYear()}年${desiredArrival.getMonth() + 1}月${desiredArrival.getDate()}日（${WEEKDAY_NAMES[desiredArrival.getDay()]}） ${hour}:${minute}`;
+  return {
+    type: "arrival",
+    at: startDate
+      ? toDateTimeInputValue(new Date(startDate.getTime() - bufferMinutes * 60000))
+      : event.start_at,
+    label: "到着希望時刻",
+  };
 }
 
-function RouteSearchModal({
-  event,
-  initialRouteResult,
-  onBack,
-  onBusyChange,
-  onRegister,
-  onRegisterSuccess,
-  onSearch,
-  onSearchSuccess,
-}) {
-  const [origin, setOrigin] = useState("");
-  const [originPlace, setOriginPlace] = useState(null);
+function formatTiming(value) {
+  const date = parseDateTime(value);
+  if (!date) return "未設定";
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日（${WEEKDAY_NAMES[date.getDay()]}） ${value.slice(11, 16)}`;
+}
+
+function RouteSearchModal({ direction, event, initialRouteResult, onBack, onBusyChange, onRegister, onRegisterSuccess, onSearch, onSearchSuccess }) {
+  const [placeText, setPlaceText] = useState("");
+  const [selectedPlace, setSelectedPlace] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [routeResult, setRouteResult] = useState(initialRouteResult);
+  const timing = routeTiming(event, direction);
+  const eventPlace = event.location_name || event.destination || "未設定";
+  const isOutbound = direction === "outbound";
+
+  function externalPlace() {
+    return selectedPlace
+      ? {
+          name: selectedPlace.name || placeText.trim(),
+          address: selectedPlace.address || null,
+          place_id: selectedPlace.place_id || null,
+          lat: selectedPlace.lat ?? null,
+          lng: selectedPlace.lng ?? null,
+        }
+      : { name: placeText.trim(), address: null, place_id: null, lat: null, lng: null };
+  }
 
   async function handleSubmit(submitEvent) {
     submitEvent.preventDefault();
-
-    if (isSearching) {
+    if (!placeText.trim()) {
+      setErrorMessage(isOutbound ? "目的地を入力してください" : "出発地を入力してください");
       return;
     }
-
-    const trimmedOrigin = origin.trim();
-    if (!trimmedOrigin) {
-      setErrorMessage("出発地を入力してください");
-      return;
-    }
-
     setIsSearching(true);
     onBusyChange(true);
     setErrorMessage("");
     setRouteResult(null);
-
     try {
-      const originRequest = originPlace
-        ? {
-            origin_name: originPlace.name || trimmedOrigin,
-            origin_address: originPlace.address || null,
-            origin_place_id: originPlace.place_id || null,
-            origin_lat: originPlace.lat,
-            origin_lng: originPlace.lng,
-          }
-        : { origin_name: trimmedOrigin };
-      const result = await onSearch(event.id, originRequest);
+      const result = await onSearch(event.id, direction, externalPlace());
       setRouteResult(result);
       onSearchSuccess?.(result);
-    } catch (searchError) {
-      setErrorMessage(searchError.message);
+    } catch (error) {
+      setErrorMessage(error.message);
     } finally {
       setIsSearching(false);
       onBusyChange(false);
@@ -77,19 +70,14 @@ function RouteSearchModal({
   }
 
   async function handleRegister(route) {
-    if (isRegistering) {
-      return;
-    }
-
     setIsRegistering(true);
     onBusyChange(true);
     setErrorMessage("");
-
     try {
-      const savedTravelPlan = await onRegister(event.id, route);
-      onRegisterSuccess(savedTravelPlan);
-    } catch (registerError) {
-      setErrorMessage(registerError.message);
+      const saved = await onRegister(event.id, direction, route, externalPlace());
+      onRegisterSuccess(saved);
+    } catch (error) {
+      setErrorMessage(error.message);
     } finally {
       setIsRegistering(false);
       onBusyChange(false);
@@ -97,82 +85,15 @@ function RouteSearchModal({
   }
 
   if (routeResult) {
-    return (
-      <RouteSearchResult
-        errorMessage={errorMessage}
-        isRegistering={isRegistering}
-        route={routeResult}
-        onRegister={handleRegister}
-        onRetry={() => {
-          setOrigin("");
-          setOriginPlace(null);
-          setRouteResult(null);
-          setErrorMessage("");
-        }}
-      />
-    );
+    return <RouteSearchResult errorMessage={errorMessage} isRegistering={isRegistering} route={routeResult} onRegister={handleRegister} onRetry={() => { setRouteResult(null); setErrorMessage(""); }} />;
   }
 
-  return (
-    <form className="route-search-form" onSubmit={handleSubmit}>
-      <div className="modal-form-field">
-        <label htmlFor="route-search-origin">出発地</label>
-        <PlaceAutocompleteInput
-          id="route-search-origin"
-          value={origin}
-          placeholder="例：九州大学 伊都キャンパス"
-          autoFocus
-          disabled={isSearching}
-          onChange={(nextOrigin) => {
-            setOrigin(nextOrigin);
-            setOriginPlace(null);
-            setErrorMessage("");
-            setRouteResult(null);
-          }}
-          onPlaceSelect={setOriginPlace}
-        />
-      </div>
-
-      <dl className="route-search-summary">
-        <div>
-          <dt>目的地</dt>
-          <dd>{event.location_name || event.destination || "未設定"}</dd>
-        </div>
-        <div>
-          <dt>到着希望時刻</dt>
-          <dd>{formatDesiredArrival(event)}</dd>
-        </div>
-        <div>
-          <dt>到着余裕時間</dt>
-          <dd>{event.arrival_buffer_minutes ?? 0}分</dd>
-        </div>
-      </dl>
-
-      {errorMessage && (
-        <p className="modal-error-message" role="alert">
-          {errorMessage}
-        </p>
-      )}
-
-      <div className="modal-actions">
-        <button
-          className="secondary-button"
-          type="button"
-          disabled={isSearching}
-          onClick={onBack}
-        >
-          戻る
-        </button>
-        <button
-          className="primary-button"
-          type="submit"
-          disabled={isSearching}
-        >
-          {isSearching ? "検索中..." : "検索する"}
-        </button>
-      </div>
-    </form>
-  );
+  return <form className="route-search-form" onSubmit={handleSubmit}>
+    <div className="modal-form-field"><label htmlFor="route-search-place">{isOutbound ? "目的地" : "出発地"}</label><PlaceAutocompleteInput id="route-search-place" value={placeText} placeholder={isOutbound ? "例：自宅" : "例：京都駅"} autoFocus disabled={isSearching} onChange={(value) => { setPlaceText(value); setSelectedPlace(null); setErrorMessage(""); }} onPlaceSelect={(place) => { setSelectedPlace(place); if (place) setPlaceText(place.name); }} /></div>
+    <dl className="route-search-summary"><div><dt>出発地</dt><dd>{isOutbound ? eventPlace : placeText || "未設定"}</dd></div><div><dt>目的地</dt><dd>{isOutbound ? placeText || "未設定" : eventPlace}</dd></div><div><dt>{timing.label}</dt><dd>{formatTiming(timing.at)}</dd></div></dl>
+    {errorMessage && <p className="modal-error-message" role="alert">{errorMessage}</p>}
+    <div className="modal-actions"><button className="secondary-button" type="button" disabled={isSearching} onClick={onBack}>戻る</button><button className="primary-button" type="submit" disabled={isSearching}>{isSearching ? "検索中..." : "検索する"}</button></div>
+  </form>;
 }
 
 export default RouteSearchModal;

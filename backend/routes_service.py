@@ -74,10 +74,11 @@ class RouteProviderError(RoutesServiceError):
 def search_route(
     origin,
     destination,
-    arrival_at,
+    requested_at,
     provider_name=None,
     origin_display_name=None,
     destination_display_name=None,
+    time_type="arrival",
 ):
     """設定されたProviderから駅すぱあと形式データを取得して変換する。"""
     selected_provider = (
@@ -86,7 +87,12 @@ def search_route(
 
     try:
         provider = get_route_provider(selected_provider)
-        response_data = provider(origin, destination, arrival_at)
+        response_data = provider(
+            origin,
+            destination,
+            requested_at,
+            time_type=time_type,
+        )
     except EkispertApiKeyError as error:
         raise RoutesApiKeyError(str(error)) from error
     except EkispertProviderError as error:

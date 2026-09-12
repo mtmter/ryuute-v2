@@ -75,13 +75,16 @@ function EventDetailsModal({
   onPreparationAdd,
   onPreparationDelete,
   onPreparationUpdate,
+  onCreateTripFromEvent,
   onDelete,
   onRouteRegister,
   onRouteSearch,
   onRouteSearchSuccess,
-  onTravelPlanLoad,
+  onTravelBlockSelect,
   onUpdate,
   preparations,
+  travelBlocks,
+  trips,
   routeSearchResult,
 }) {
   const [mode, setMode] = useState("details");
@@ -102,8 +105,9 @@ function EventDetailsModal({
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRouteSearching, setIsRouteSearching] = useState(false);
-  const [travelPlan, setTravelPlan] = useState(null);
-  const [isTravelPlanLoading, setIsTravelPlanLoading] = useState(true);
+  const [routeDirection, setRouteDirection] = useState("inbound");
+  const [deleteTravelAction, setDeleteTravelAction] = useState("keep");
+  const [tripId, setTripId] = useState(event.trip_id ?? "");
 
   const isBusy = isSubmitting || isRouteSearching;
   const googleMapsUrl = createGoogleMapsUrl(event);
@@ -124,33 +128,6 @@ function EventDetailsModal({
       (hasCoordinateValue(event.destination_lat) &&
         hasCoordinateValue(event.destination_lng)),
   );
-
-  useEffect(() => {
-    let shouldIgnoreResult = false;
-
-    async function loadTravelPlan() {
-      try {
-        const loadedTravelPlan = await onTravelPlanLoad(event.id);
-        if (!shouldIgnoreResult) {
-          setTravelPlan(loadedTravelPlan);
-        }
-      } catch (loadError) {
-        if (!shouldIgnoreResult) {
-          setErrorMessage(loadError.message);
-        }
-      } finally {
-        if (!shouldIgnoreResult) {
-          setIsTravelPlanLoading(false);
-        }
-      }
-    }
-
-    loadTravelPlan();
-
-    return () => {
-      shouldIgnoreResult = true;
-    };
-  }, [event.id, onTravelPlanLoad]);
 
   useEffect(() => {
     function handleKeyDown(keyEvent) {
@@ -184,6 +161,7 @@ function EventDetailsModal({
     setArrivalBufferMinutes(
       event.arrival_buffer_minutes?.toString() ?? "",
     );
+    setTripId(event.trip_id ?? "");
     setErrorMessage("");
   }
 
@@ -239,6 +217,8 @@ function EventDetailsModal({
         destination_lng: selectedPlace?.lng ?? null,
         arrival_buffer_minutes:
           arrivalBufferMinutes === "" ? null : Number(arrivalBufferMinutes),
+        trip_id: tripId || null,
+        calendar_visibility: event.calendar_visibility ?? "normal",
       });
       setMode("details");
     } catch (updateError) {
@@ -257,7 +237,7 @@ function EventDetailsModal({
     setErrorMessage("");
 
     try {
-      await onDelete(event.id);
+      await onDelete(event.id, deleteTravelAction);
     } catch (deleteError) {
       setErrorMessage(deleteError.message);
       setIsSubmitting(false);
@@ -303,19 +283,22 @@ function EventDetailsModal({
 
         {mode === "route" ? (
           <RouteSearchModal
+            direction={routeDirection}
             event={event}
             onBack={() => setMode("details")}
             onBusyChange={setIsRouteSearching}
             onRegister={onRouteRegister}
-            onRegisterSuccess={(savedTravelPlan) => {
-              setTravelPlan(savedTravelPlan);
+            onRegisterSuccess={() => {
               setErrorMessage("");
               setMode("details");
             }}
             onSearch={onRouteSearch}
-            onSearchSuccess={onRouteSearchSuccess}
+            onSearchSuccess={(result) =>
+              onRouteSearchSuccess(routeDirection, result)
+            }
             initialRouteResult={
-              routeSearchResult?.eventId === event.id
+              routeSearchResult?.eventId === event.id &&
+              routeSearchResult?.direction === routeDirection
                 ? routeSearchResult.result
                 : null
             }
@@ -335,6 +318,14 @@ function EventDetailsModal({
                 required
                 onChange={(inputEvent) => setTitle(inputEvent.target.value)}
               />
+            </div>
+
+            <div className="modal-form-field">
+              <label htmlFor="edit-event-trip">Trip <span>任意</span></label>
+              <select id="edit-event-trip" value={tripId} onChange={(inputEvent) => setTripId(inputEvent.target.value)}>
+                <option value="">関連付けない</option>
+                {trips.map((trip) => <option value={trip.id} key={trip.id}>{trip.title}</option>)}
+              </select>
             </div>
 
             <div className="modal-date-fields">
@@ -454,6 +445,7 @@ function EventDetailsModal({
             <p className="delete-confirmation-note">
               「{event.title}」は元に戻せません。
             </p>
+            {travelBlocks.length > 0 && <div className="delete-linked-choice"><p>関連する移動ブロックが{travelBlocks.length}件あります。</p><label><input type="radio" name="event-travel-delete" value="keep" checked={deleteTravelAction === "keep"} onChange={() => setDeleteTravelAction("keep")} />移動は独立させて保持</label><label><input type="radio" name="event-travel-delete" value="delete" checked={deleteTravelAction === "delete"} onChange={() => setDeleteTravelAction("delete")} />関連移動も削除</label></div>}
 
             {errorMessage && (
               <p className="modal-error-message" role="alert">
@@ -543,22 +535,12 @@ function EventDetailsModal({
               onUpdate={onPreparationUpdate}
             />
 
-            {isTravelPlanLoading ? (
-              <section className="travel-plan-section">
-                <h3>移動予定</h3>
-                <p className="travel-plan-empty">読み込み中...</p>
-              </section>
-            ) : travelPlan || canSearchRoute ? (
+            {canSearchRoute ? (
               <TravelPlanDetails
-                travelPlan={travelPlan}
-                onSearch={
-                  canSearchRoute
-                    ? () => {
-                        setErrorMessage("");
-                        setMode("route");
-                      }
-                    : null
-                }
+                travelBlocks={travelBlocks}
+                onSelect={onTravelBlockSelect}
+                onSearchInbound={() => { setRouteDirection("inbound"); setErrorMessage(""); setMode("route"); }}
+                onSearchOutbound={() => { setRouteDirection("outbound"); setErrorMessage(""); setMode("route"); }}
               />
             ) : (
               <section className="travel-plan-section">
@@ -576,6 +558,7 @@ function EventDetailsModal({
             )}
 
             <div className="modal-actions event-details-actions">
+              {(event.source_type === "google" || event.source?.type === "google") && !event.trip_id && <button className="secondary-button" type="button" onClick={() => onCreateTripFromEvent(event)}>Tripにする</button>}
               <button
                 className="danger-secondary-button"
                 type="button"

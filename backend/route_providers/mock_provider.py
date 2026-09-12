@@ -20,25 +20,49 @@ FIXTURE_DESIRED_ARRIVAL_AT = datetime(
 )
 
 
-def get_route(_origin, _destination, arrival_at):
-    """デモ用fixtureを到着希望日時に合わせて返す。"""
+def get_route(
+    _origin,
+    _destination,
+    requested_at,
+    time_type="arrival",
+):
+    """デモ用fixtureを指定した出発または到着日時に合わせて返す。"""
     with FIXTURE_PATH.open(encoding="utf-8") as fixture_file:
         response_data = json.load(fixture_file)
 
-    requested_arrival_at = _as_japan_datetime(arrival_at)
-    time_difference = requested_arrival_at - FIXTURE_DESIRED_ARRIVAL_AT
+    requested_datetime = _as_japan_datetime(requested_at)
+    if time_type == "arrival":
+        fixture_datetime = FIXTURE_DESIRED_ARRIVAL_AT
+    elif time_type == "departure":
+        fixture_datetime = _fixture_departure_at(response_data)
+    else:
+        raise ValueError("検索時刻種別が不正です")
+    time_difference = requested_datetime - fixture_datetime
     _shift_datetimes(response_data, time_difference)
     return response_data
 
 
 def _as_japan_datetime(value):
     if not isinstance(value, datetime):
-        raise ValueError("到着希望日時がdatetimeではありません")
+        raise ValueError("検索日時がdatetimeではありません")
 
     if value.tzinfo is None:
         return value.replace(tzinfo=JAPAN_TIMEZONE)
 
     return value.astimezone(JAPAN_TIMEZONE)
+
+
+def _fixture_departure_at(response_data):
+    course = response_data["ResultSet"]["Course"]
+    if isinstance(course, list):
+        course = course[0]
+    lines = course["Route"]["Line"]
+    if not isinstance(lines, list):
+        lines = [lines]
+    value = lines[0]["DepartureState"]["Datetime"]
+    if isinstance(value, dict):
+        value = value["text"]
+    return datetime.fromisoformat(value).astimezone(JAPAN_TIMEZONE)
 
 
 def _shift_datetimes(value, time_difference):

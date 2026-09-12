@@ -25,6 +25,22 @@ ROUTE_REQUEST = {
     },
 }
 
+NEW_ROUTE_REQUEST = {
+    "origin": {
+        "name": "京都駅",
+        "lat": 34.9858,
+        "lng": 135.7588,
+    },
+    "destination": {
+        "name": "嵐山",
+        "address": "京都府京都市右京区嵯峨",
+    },
+    "timing": {
+        "type": "departure",
+        "at": "2026-09-12T13:00",
+    },
+}
+
 
 def create_route_request(request_data=ROUTE_REQUEST):
     return main.DirectRouteSearchRequest.model_validate(request_data)
@@ -101,6 +117,33 @@ class CorsOriginsTest(unittest.TestCase):
 
 
 class RouteSearchApiTest(unittest.TestCase):
+    def test_route_search_accepts_provider_neutral_departure_request(self):
+        expected_route = {
+            "origin": "京都駅",
+            "destination": "嵐山",
+            "departure_at": "2026-09-12T13:00",
+            "arrival_at": "2026-09-12T13:30",
+            "duration_minutes": 30,
+            "transport_mode": "TRANSIT",
+            "segments": [],
+        }
+        with patch("main.search_route", return_value=expected_route) as search:
+            result = main.search_direct_route(
+                main.DirectRouteSearchRequest.model_validate(
+                    NEW_ROUTE_REQUEST
+                )
+            )
+
+        self.assertEqual(result, expected_route)
+        search.assert_called_once_with(
+            "34.9858,135.7588",
+            "京都府京都市右京区嵯峨",
+            main.datetime(2026, 9, 12, 13, 0),
+            time_type="departure",
+            origin_display_name="京都駅",
+            destination_display_name="嵐山",
+        )
+
     def test_route_search_works_without_database(self):
         with patch.dict(
             os.environ,
@@ -147,6 +190,18 @@ class RouteSearchApiTest(unittest.TestCase):
                     )
 
                 self.assertEqual(context.exception.status_code, 400)
+
+        invalid_new_request = {
+            **NEW_ROUTE_REQUEST,
+            "timing": {"type": "departure", "at": "invalid"},
+        }
+        with self.assertRaises(HTTPException) as context:
+            main.search_direct_route(
+                main.DirectRouteSearchRequest.model_validate(
+                    invalid_new_request
+                )
+            )
+        self.assertEqual(context.exception.status_code, 400)
 
     def test_route_search_converts_service_errors(self):
         error_cases = [
