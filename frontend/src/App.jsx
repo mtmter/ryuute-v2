@@ -847,25 +847,7 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
             <button
               className={activeView === "week" ? "is-active" : ""}
               type="button"
-              onClick={() => {
-                if (activeView === "month") {
-                  const today = new Date();
-                  const isCurrentMonth =
-                    selectedDate.getFullYear() === today.getFullYear() &&
-                    selectedDate.getMonth() === today.getMonth();
-
-                  handleCalendarDateChange(
-                    isCurrentMonth
-                      ? today
-                      : new Date(
-                          selectedDate.getFullYear(),
-                          selectedDate.getMonth(),
-                          1,
-                        ),
-                  );
-                }
-                setActiveView("week");
-              }}
+              onClick={() => setActiveView("week")}
             >
               週
             </button>
