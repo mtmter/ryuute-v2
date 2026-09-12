@@ -33,17 +33,21 @@ VITE_BACKEND_API_BASE_URL
 バックエンド:
 
 ```text
-ROUTE_PROVIDER
 CORS_ORIGINS
+ROUTE_PROVIDER_MODE
+TRANSIT_API_URL
+TRANSIT_USER_AGENT
+TRANSIT_TIMEZONE
 ```
 
-この一覧は変更前のProduction設定です。`ROUTE_PROVIDER` は移行互換として読み込まれますが、新規デプロイでは下記の `ROUTE_PROVIDER_MODE` を使用します。Productionには `EKISPERT_API_KEY` が登録されていません。公開経路検索が成功し、旧Mockと同じ構造・所要時間の結果を返すことから、確認時点の本番経路検索はMock Providerで動作していると判断できます。
+`ROUTE_PROVIDER_MODE` は `auto` に設定しています。日本国内で座標を持つ地点の検索はTransitousを優先し、対象外・経路なし・timeout・rate limit・server errorのときだけGoogle徒歩検索へfallbackします。旧 `ROUTE_PROVIDER=mock` は削除済みです。Productionには `EKISPERT_API_KEY` が登録されていません。
 
 公開環境では次を確認済みです。
 
 - フロントエンドURLがHTTP 200とHTMLを返す
 - `GET /api/health` がHTTP 200と `{"status":"ok"}` を返す
 - `POST /api/route-search` がHTTP 200と共通Route JSONを返す
+- 東京駅から渋谷駅への座標付き検索が `provider: "transit"`、`route_kind: "transit"`、`is_fallback: false` を返す
 - バックエンドの `CORS_ORIGINS` が `https://planrail-frontend.vercel.app` と旧フロントエンドURLの両方を許可する
 
 ## リポジトリで管理している設定
@@ -70,7 +74,7 @@ Vercelの設定はリポジトリだけでは再現されないため、変更�
 バックエンドの環境変数例:
 
 ```text
-ROUTE_PROVIDER_MODE=mock
+ROUTE_PROVIDER_MODE=auto
 CORS_ORIGINS=https://<frontend-domain>
 GOOGLE_MAPS_API_KEY=
 EKISPERT_API_KEY=
