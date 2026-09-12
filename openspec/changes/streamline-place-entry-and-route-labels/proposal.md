@@ -8,6 +8,7 @@
 - 自由入力の場所は予定として保存できるままとし、座標を持たない地点を含む経路検索操作は実行不可にして、候補を選択する案内を表示する。
 - 保存済みの場所文字列と既存Firestoreフィールドの互換性を維持し、候補を選び直した時だけPlace IDと座標を更新する。
 - LS8H Transit APIの数値だけの内部路線・便識別子をユーザーへ表示せず、読める路線名または交通種別を表示する。
+- LS8H Transit APIが徒歩のみの候補と公共交通を含む候補を同時に返す場合、公共交通を含む候補を優先する。
 - 非目標: 座標のない自由入力をサーバー側でジオコーディングすること、Google Routes用サーバーキーを追加すること、既存予定の一括移行。
 
 ## Capabilities
@@ -24,5 +25,5 @@
 ## Impact
 
 - `frontend/src/components/AddItemModal.jsx`、`EventDetailsModal.jsx`、経路検索modalと移動詳細表示を変更する。
-- `frontend/src/travelUtils.js`、経路検索の操作可否、LS8H Transit APIの区間ラベル変換とそのテストを変更する。
+- `frontend/src/travelUtils.js`、経路検索の操作可否、LS8H Transit APIの候補選択・区間ラベル変換とそのテストを変更する。
 - Firestoreの既存フィールド名とFastAPIのエンドポイントは維持する。

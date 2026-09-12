@@ -10,7 +10,8 @@ from .types import ErrorCategory, ProviderError, RouteRequest, RouteResult, Rout
 
 
 DEFAULT_API_URL = "https://api.transit.ls8h.com/api/v1/plan"
-REQUEST_TIMEOUT_SECONDS = 20.0
+REQUEST_TIMEOUT_SECONDS = 30.0
+NUM_ITINERARIES = 5
 NOTICE = "LS8H Transit APIによる非公式経路情報です。重要な移動は交通事業者の案内も確認してください。"
 
 
@@ -26,7 +27,7 @@ def search(request: RouteRequest, *, api_url=None):
         "date": requested_at.strftime("%Y%m%d"),
         "time": requested_at.strftime("%H:%M:%S"),
         "type": request.time_type,
-        "numItineraries": "1",
+        "numItineraries": str(NUM_ITINERARIES),
     }
     try:
         response = httpx.get(url, params=params, timeout=REQUEST_TIMEOUT_SECONDS)
@@ -50,9 +51,9 @@ def convert_route(data, request: RouteRequest):
     journeys = data.get("journeys")
     if journeys is None or journeys == []:
         raise ProviderError(ErrorCategory.NO_ROUTE, "経路が見つかりませんでした", provider="transit")
-    if not isinstance(journeys, list) or not isinstance(journeys[0], dict):
+    if not isinstance(journeys, list):
         raise ProviderError(ErrorCategory.INVALID_RESPONSE, "LS8H Transit APIのjourneys形式が不正です", provider="transit")
-    journey = journeys[0]
+    journey = _select_journey(journeys)
     legs = journey.get("legs")
     if not isinstance(legs, list) or not legs:
         raise ProviderError(ErrorCategory.INVALID_RESPONSE, "LS8H Transit APIの経路に区間がありません", provider="transit")
@@ -79,6 +80,20 @@ def convert_route(data, request: RouteRequest):
         segments=segments,
         notices=(NOTICE,),
     )
+
+
+def _select_journey(journeys):
+    valid_journeys = [journey for journey in journeys if isinstance(journey, dict)]
+    if not valid_journeys:
+        raise ProviderError(ErrorCategory.INVALID_RESPONSE, "LS8H Transit APIのjourneys形式が不正です", provider="transit")
+    for journey in valid_journeys:
+        legs = journey.get("legs")
+        if isinstance(legs, list) and any(
+            isinstance(leg, dict) and leg.get("kind", "").lower() == "transit"
+            for leg in legs
+        ):
+            return journey
+    return valid_journeys[0]
 
 
 def _endpoint(place):

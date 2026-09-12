@@ -135,6 +135,7 @@ class TransitProviderTest(unittest.TestCase):
         self.assertEqual(params["date"], "20260825")
         self.assertEqual(params["time"], "10:12:00")
         self.assertEqual(params["type"], "arrival")
+        self.assertEqual(params["numItineraries"], "5")
         self.assertEqual(result.provider, "transit")
         self.assertEqual(result.departure_at, "2026-08-25T08:54")
         self.assertIn("LS8H Transit API", result.notices[0])
@@ -166,6 +167,29 @@ class TransitProviderTest(unittest.TestCase):
         )
         result = transit_provider.convert_route(data, request())
         self.assertEqual(result.segments[1].line_name, "テスト行き")
+
+    def test_prefers_a_transit_journey_over_an_earlier_walk_only_journey(self):
+        data = self.fixture()
+        data["journeys"].insert(
+            0,
+            {
+                "departureSecs": 32400,
+                "arrivalSecs": 42000,
+                "durationSecs": 9600,
+                "legs": [
+                    {
+                        "kind": "walk",
+                        "from": {"name": "姪浜駅"},
+                        "to": {"name": "博多駅"},
+                        "departureSecs": 32400,
+                        "arrivalSecs": 42000,
+                    }
+                ],
+            },
+        )
+        result = transit_provider.convert_route(data, request())
+        self.assertEqual(result.segments[1].type, "TRANSIT")
+        self.assertEqual(result.segments[1].line_name, "筑肥線")
 
     @patch("route_providers.transit_provider.httpx.get")
     def test_missing_route_429_timeout_and_invalid_json(self, get):

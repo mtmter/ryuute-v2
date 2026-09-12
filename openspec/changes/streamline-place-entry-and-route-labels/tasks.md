@@ -12,3 +12,8 @@
 
 - [x] 3.1 Run backend unit tests, frontend tests, lint and build, and verify a coordinate-free search is blocked before the API request.
 - [x] 3.2 Update README and current specs for the single location field and coordinate-required route search, and verify OpenSpec validation passes.
+
+## 4. LS8H Transit Candidate Selection
+
+- [x] 4.1 Request multiple LS8H journeys with an extended timeout, and select a journey containing public transit over an earlier walk-only journey.
+- [x] 4.2 Add regression coverage for a walk-first response, document the selection behavior, and run backend and frontend verification.

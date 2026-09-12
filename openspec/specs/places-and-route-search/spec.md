@@ -102,6 +102,11 @@
 - **WHEN** `transit` または国内座標の `auto` を選択して経路を検索する
 - **THEN** バックエンドはLS8H Transit APIへ座標、日付、時刻および到着・出発種別を送る
 
+#### Scenario: 徒歩候補と公共交通候補が混在する
+
+- **WHEN** LS8H Transit APIが徒歩のみの候補と公共交通を含む候補を返す
+- **THEN** バックエンドは公共交通を含む候補を共通Routeとして返す
+
 ### Requirement: 共通Route JSONを返す
 
 Providerのレスポンスは、フロントエンドへ返す前に次の共通形式へ変換しなければならない（MUST）。
