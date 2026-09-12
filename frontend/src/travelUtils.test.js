@@ -107,6 +107,16 @@ test("trip overview events are hidden from calendar inputs", () => {
   );
 });
 
+test("cancelled Google events are hidden from calendar inputs", () => {
+  assert.deepEqual(
+    visibleCalendarEvents([
+      { id: "active", source: "google_calendar", source_status: "active" },
+      { id: "cancelled", source: "google_calendar", source_status: "cancelled" },
+    ]).map((event) => event.id),
+    ["active"],
+  );
+});
+
 test("legacy travel migration uses a deterministic id and keeps route data", () => {
   const legacy = {
     id: "event-1",
@@ -123,4 +133,29 @@ test("legacy travel migration uses a deterministic id and keeps route data", () 
   assert.equal(first.id, "legacy-event-1");
   assert.equal(first.destination_event_id, "event-1");
   assert.equal(first.segments.length, 1);
+  assert.equal(first.provider, "legacy");
+  assert.equal(first.route_kind, "transit");
+  assert.equal(first.is_fallback, false);
+  assert.deepEqual(first.notices, ["旧形式の移動予定から移行しました"]);
+});
+
+test("legacy travel migration preserves provider metadata when present", () => {
+  const block = legacyTravelPlanToTravelBlock({
+    id: "event-2",
+    event_id: "event-2",
+    origin: "A",
+    destination: "B",
+    departure_at: "2026-09-12T13:00",
+    arrival_at: "2026-09-12T13:30",
+    transport_mode: "WALK",
+    provider: "google",
+    route_kind: "walk",
+    is_fallback: true,
+    notices: ["Google Maps提供情報"],
+  });
+
+  assert.equal(block.provider, "google");
+  assert.equal(block.route_kind, "walk");
+  assert.equal(block.is_fallback, true);
+  assert.deepEqual(block.notices, ["Google Maps提供情報"]);
 });

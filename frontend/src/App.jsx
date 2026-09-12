@@ -9,12 +9,11 @@ import MiniCalendar from "./components/MiniCalendar";
 import MonthCalendar from "./components/MonthCalendar";
 import PreparationReminderList from "./components/PreparationReminderList";
 import PreparationReminderSettingsModal from "./components/PreparationReminderSettingsModal";
-import TaskDetailsModal from "./components/TaskDetailsModal";
-import TaskList from "./components/TaskList";
 import TravelBlockDetailsModal from "./components/TravelBlockDetailsModal";
 import TripDetailsModal from "./components/TripDetailsModal";
 import TripList from "./components/TripList";
 import WeekCalendar from "./components/WeekCalendar";
+import GoogleCalendarSettings from "./components/GoogleCalendarSettings";
 import useAuth from "./auth/useAuth";
 import {
   createEvent as createFirestoreEvent,
@@ -22,19 +21,33 @@ import {
   createTravelBlock as createFirestoreTravelBlock,
   createTrip as createFirestoreTrip,
   createTripFromEvent as createFirestoreTripFromEvent,
-  createTask as createFirestoreTask,
   deleteEvent as deleteFirestoreEvent,
   deletePreparation as deleteFirestorePreparation,
   deleteTravelBlock as deleteFirestoreTravelBlock,
   deleteTrip as deleteFirestoreTrip,
-  deleteTask as deleteFirestoreTask,
   loadScheduleData,
+  getGoogleCalendarIntegration,
+  listGoogleCalendarEventIds,
+  saveGoogleCalendarIntegration,
+  saveGoogleCalendarSyncState,
+  writeGoogleCalendarEvents,
   updateEvent as updateFirestoreEvent,
   updatePreparation as updateFirestorePreparation,
   updateTravelBlock as updateFirestoreTravelBlock,
   updateTrip as updateFirestoreTrip,
-  updateTask as updateFirestoreTask,
 } from "./firestoreService";
+import {
+  connectGoogleCalendar,
+  disconnectGoogleCalendar,
+  getCalendarAccessToken,
+} from "./googleCalendarAuth";
+import {
+  getGoogleCalendarStartupAction,
+  GoogleCalendarAuthError,
+  listGoogleCalendars,
+  syncGoogleCalendar,
+} from "./googleCalendarSync";
+import { defaultSelectedCalendarIds } from "./googleCalendarPersistence";
 import {
   addDays,
   addMonths,
@@ -53,6 +66,7 @@ import {
 } from "./travelUtils";
 
 const API_BASE_URL = import.meta.env.VITE_BACKEND_API_BASE_URL;
+const GOOGLE_OAUTH_CLIENT_ID = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
 const PREPARATION_REMINDER_STORAGE_KEY =
   "planrail_preparation_reminder_minutes";
 const LEGACY_PREPARATION_REMINDER_STORAGE_KEY =
@@ -183,20 +197,13 @@ function createInitialValues(
   date,
   itemType,
   eventStartMinutes = 9 * 60,
-  taskDueMinutes = 23 * 60 + 45,
 ) {
   const eventStart = createDateAtMinutes(date, eventStartMinutes);
   const eventEnd = new Date(eventStart.getTime() + 60 * 60 * 1000);
-  const taskDue =
-    taskDueMinutes === null
-      ? ""
-      : toDateTimeInputValue(createDateAtMinutes(date, taskDueMinutes));
-
   return {
     itemType,
     eventStartAt: toDateTimeInputValue(eventStart),
     eventEndAt: toDateTimeInputValue(eventEnd),
-    taskDueAt: taskDue,
   };
 }
 
@@ -221,17 +228,14 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
     return new Date(today.getFullYear(), today.getMonth(), 1);
   });
   const [events, setEvents] = useState([]);
-  const [tasks, setTasks] = useState([]);
   const [preparations, setPreparations] = useState(null);
   const [trips, setTrips] = useState([]);
   const [travelBlocks, setTravelBlocks] = useState([]);
   const [errorMessage, setErrorMessage] = useState("");
   const [preparationErrorMessage, setPreparationErrorMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [updatingTaskId, setUpdatingTaskId] = useState(null);
   const [addModalValues, setAddModalValues] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
-  const [selectedTask, setSelectedTask] = useState(null);
   const [selectedTrip, setSelectedTrip] = useState(null);
   const [selectedTravelBlock, setSelectedTravelBlock] = useState(null);
   const [routeSearchResult, setRouteSearchResult] = useState(null);
@@ -240,16 +244,25 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
     getInitialPreparationReminderMinutes,
   );
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [googleIntegration, setGoogleIntegration] = useState(null);
+  const [googleCalendars, setGoogleCalendars] = useState([]);
+  const [googleCalendarStatus, setGoogleCalendarStatus] = useState("disconnected");
+  const [googleCalendarError, setGoogleCalendarError] = useState("");
+  const startupSyncAttemptedRef = useRef(false);
 
   useEffect(() => {
     async function loadSchedule() {
       try {
-        const scheduleData = await loadScheduleData(user.uid);
+        const [scheduleData, integration] = await Promise.all([
+          loadScheduleData(user.uid),
+          getGoogleCalendarIntegration(user.uid),
+        ]);
         setEvents(scheduleData.events);
-        setTasks(scheduleData.tasks);
         setPreparations(scheduleData.preparations);
         setTrips(scheduleData.trips);
         setTravelBlocks(scheduleData.travelBlocks);
+        setGoogleIntegration(integration);
+        setGoogleCalendarStatus(getGoogleCalendarStartupAction(integration, getCalendarAccessToken()));
         setPreparationErrorMessage(
           scheduleData.preparations === null
             ? "準備項目を取得できなかったため、準備案内を表示できません"
@@ -264,6 +277,101 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
 
     loadSchedule();
   }, [user.uid]);
+
+  useEffect(() => {
+    const accessToken = getCalendarAccessToken();
+    if (
+      startupSyncAttemptedRef.current ||
+      !googleIntegration ||
+      getGoogleCalendarStartupAction(googleIntegration, accessToken) !== "sync"
+    ) return;
+    startupSyncAttemptedRef.current = true;
+    listGoogleCalendars(accessToken)
+      .then((calendars) => setGoogleCalendars(calendars))
+      .catch(() => setGoogleCalendars(googleIntegration.selected_calendars));
+    performGoogleCalendarSync(googleIntegration.selected_calendars, accessToken, googleIntegration);
+  // Startup sync intentionally runs once after the saved integration has loaded.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleIntegration]);
+
+  async function refreshSchedule() {
+    const scheduleData = await loadScheduleData(user.uid);
+    setEvents(scheduleData.events);
+    setPreparations(scheduleData.preparations);
+    setTrips(scheduleData.trips);
+    setTravelBlocks(scheduleData.travelBlocks);
+  }
+
+  async function performGoogleCalendarSync(selectedCalendars, accessToken, baseIntegration = googleIntegration) {
+    if (!accessToken) {
+      setGoogleCalendarStatus("reconnect");
+      return;
+    }
+    setGoogleCalendarStatus("syncing");
+    setGoogleCalendarError("");
+    let nextIntegration = baseIntegration;
+    try {
+      for (const calendar of selectedCalendars) {
+        const result = await syncGoogleCalendar({
+          calendar,
+          accessToken,
+          syncToken: nextIntegration?.sync_state?.[calendar.id]?.sync_token,
+          listExistingEventIds: (calendarId) => listGoogleCalendarEventIds(user.uid, calendarId),
+          writeEvents: (items) => writeGoogleCalendarEvents(user.uid, items),
+          commitSyncState: async (calendarId, state) => {
+            nextIntegration = await saveGoogleCalendarSyncState(user.uid, calendarId, state);
+          },
+        });
+        nextIntegration = {
+          ...nextIntegration,
+          sync_state: { ...nextIntegration.sync_state, [calendar.id]: result.syncState },
+        };
+      }
+      setGoogleIntegration(nextIntegration);
+      await refreshSchedule();
+      setGoogleCalendarStatus("connected");
+    } catch (error) {
+      setGoogleCalendarError(error.message);
+      setGoogleCalendarStatus(error instanceof GoogleCalendarAuthError ? "reconnect" : "connected");
+    }
+  }
+
+  async function handleGoogleCalendarConnect() {
+    setGoogleCalendarError("");
+    try {
+      const accessToken = await connectGoogleCalendar(GOOGLE_OAUTH_CLIENT_ID);
+      const calendars = await listGoogleCalendars(accessToken);
+      const savedIds = googleIntegration?.selected_calendars?.map((calendar) => calendar.id) ?? [];
+      const selectedIds = defaultSelectedCalendarIds(calendars, savedIds);
+      const selectedCalendars = calendars.filter((calendar) => selectedIds.includes(calendar.id));
+      const integration = await saveGoogleCalendarIntegration(user.uid, {
+        selected_calendars: selectedCalendars,
+        sync_state: googleIntegration?.sync_state ?? {},
+      });
+      startupSyncAttemptedRef.current = true;
+      setGoogleCalendars(calendars);
+      setGoogleIntegration(integration);
+      await performGoogleCalendarSync(selectedCalendars, accessToken, integration);
+    } catch (error) {
+      setGoogleCalendarError(error.message);
+      setGoogleCalendarStatus(googleIntegration?.selected_calendars?.length ? "reconnect" : "disconnected");
+    }
+  }
+
+  async function handleGoogleCalendarDisconnect() {
+    await disconnectGoogleCalendar();
+    setGoogleCalendars([]);
+    setGoogleCalendarStatus(googleIntegration?.selected_calendars?.length ? "reconnect" : "disconnected");
+  }
+
+  async function handleGoogleCalendarSelectionChange(selectedIds) {
+    const selectedCalendars = googleCalendars.filter((calendar) => selectedIds.includes(calendar.id));
+    const integration = await saveGoogleCalendarIntegration(user.uid, {
+      ...googleIntegration,
+      selected_calendars: selectedCalendars,
+    });
+    setGoogleIntegration(integration);
+  }
 
   useEffect(() => {
     try {
@@ -328,7 +436,6 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
     try {
       const scheduleData = await loadScheduleData(user.uid);
       setEvents(scheduleData.events);
-      setTasks(scheduleData.tasks);
       setPreparations(scheduleData.preparations);
       setTrips(scheduleData.trips);
       setTravelBlocks(scheduleData.travelBlocks);
@@ -344,70 +451,11 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
     }
   }
 
-  async function handleTaskToggle(task) {
-    setUpdatingTaskId(task.id);
-    setErrorMessage("");
-
-    try {
-      const updatedTask = await updateFirestoreTask(user.uid, task.id, {
-        title: task.title,
-        due_at: task.due_at,
-        description: task.description,
-        completed: !task.completed,
-      });
-      setTasks((currentTasks) =>
-        currentTasks.map((currentTask) =>
-          currentTask.id === updatedTask.id ? updatedTask : currentTask,
-        ),
-      );
-    } catch (error) {
-      setErrorMessage(error.message);
-    } finally {
-      setUpdatingTaskId(null);
-    }
-  }
-
-  async function handleUpdateTask(taskId, taskData) {
-    try {
-      const updatedTask = await updateFirestoreTask(
-        user.uid,
-        taskId,
-        taskData,
-      );
-      setTasks((currentTasks) =>
-        currentTasks.map((currentTask) =>
-          currentTask.id === updatedTask.id ? updatedTask : currentTask,
-        ),
-      );
-      setSelectedTask(updatedTask);
-    } catch {
-      throw new Error("タスク更新の通信に失敗しました");
-    }
-  }
-
-  async function handleDeleteTask(taskId) {
-    try {
-      await deleteFirestoreTask(user.uid, taskId);
-    } catch {
-      throw new Error("タスク削除の通信に失敗しました");
-    }
-
-    setTasks((currentTasks) =>
-      currentTasks.filter((currentTask) => currentTask.id !== taskId),
-    );
-    setSelectedTask(null);
-  }
-
   function handleAddButtonClick() {
     const today = new Date();
 
     if (activeView === "trips") {
       setAddModalValues(createInitialValues(today, "trip"));
-      return;
-    }
-
-    if (activeView === "tasks") {
-      setAddModalValues(createInitialValues(today, "task", 9 * 60, null));
       return;
     }
 
@@ -440,7 +488,7 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
 
   function handleWeekTimeClick(date, startMinutes) {
     setAddModalValues(
-      createInitialValues(date, "event", startMinutes, startMinutes),
+      createInitialValues(date, "event", startMinutes),
     );
   }
 
@@ -453,7 +501,7 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
     } else if (itemType === "trip") {
       createdItem = await createFirestoreTrip(user.uid, itemData);
     } else {
-      createdItem = await createFirestoreTask(user.uid, itemData);
+      throw new Error("追加する種類が不正です");
     }
     if (itemType === "event") {
       setEvents((currentEvents) => [...currentEvents, createdItem]);
@@ -461,8 +509,6 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
       setTravelBlocks((currentBlocks) => [...currentBlocks, createdItem]);
     } else if (itemType === "trip") {
       setTrips((currentTrips) => [...currentTrips, createdItem]);
-    } else {
-      setTasks((currentTasks) => [...currentTasks, createdItem]);
     }
     setAddModalValues(null);
   }
@@ -872,13 +918,6 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
               日
             </button>
             <button
-              className={activeView === "tasks" ? "is-active" : ""}
-              type="button"
-              onClick={() => setActiveView("tasks")}
-            >
-              タスク
-            </button>
-            <button
               className={activeView === "trips" ? "is-active" : ""}
               type="button"
               onClick={() => setActiveView("trips")}
@@ -932,13 +971,6 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
       <main className="app-content">
         {isLoading ? (
           <p className="status-message">読み込み中...</p>
-        ) : activeView === "tasks" ? (
-          <TaskList
-            tasks={tasks}
-            updatingTaskId={updatingTaskId}
-            onTaskSelect={setSelectedTask}
-            onTaskToggle={handleTaskToggle}
-          />
         ) : activeView === "trips" ? (
           <TripList trips={trips} onSelect={setSelectedTrip} />
         ) : (
@@ -950,6 +982,16 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
                 selectedDate={selectedDate}
                 onDateSelect={handleCalendarDateChange}
                 onDisplayedMonthChange={setMiniCalendarMonth}
+              />
+              <GoogleCalendarSettings
+                calendars={googleCalendars}
+                selectedIds={googleIntegration?.selected_calendars?.map((calendar) => calendar.id) ?? []}
+                status={googleCalendarStatus}
+                errorMessage={googleCalendarError}
+                onConnect={handleGoogleCalendarConnect}
+                onDisconnect={handleGoogleCalendarDisconnect}
+                onSelectionChange={handleGoogleCalendarSelectionChange}
+                onSync={() => performGoogleCalendarSync(googleIntegration?.selected_calendars ?? [], getCalendarAccessToken())}
               />
               <div className="sidebar-preparation-reminders">
                 <PreparationReminderList
@@ -964,21 +1006,17 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
                 <MonthCalendar
                   events={calendarEvents}
                   travelBlocks={travelBlocks}
-                  tasks={tasks}
                   selectedDate={selectedDate}
                   onDateClick={handleMonthDateClick}
                   onEventClick={setSelectedEvent}
-                  onTaskClick={setSelectedTask}
                   onTravelBlockClick={setSelectedTravelBlock}
                 />
               ) : activeView === "week" ? (
                 <WeekCalendar
                   events={calendarEvents}
                   travelBlocks={travelBlocks}
-                  tasks={tasks}
                   selectedDate={selectedDate}
                   onEventClick={setSelectedEvent}
-                  onTaskClick={setSelectedTask}
                   onTravelBlockClick={setSelectedTravelBlock}
                   onTimeClick={handleWeekTimeClick}
                 />
@@ -986,10 +1024,8 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
                 <DayCalendar
                   events={calendarEvents}
                   travelBlocks={travelBlocks}
-                  tasks={tasks}
                   selectedDate={selectedDate}
                   onEventClick={setSelectedEvent}
-                  onTaskClick={setSelectedTask}
                   onTravelBlockClick={setSelectedTravelBlock}
                   onTimeClick={handleWeekTimeClick}
                 />
@@ -1099,15 +1135,6 @@ function ScheduleApp({ authErrorMessage, onLogout, user }) {
         />
       )}
 
-      {selectedTask && (
-        <TaskDetailsModal
-          key={selectedTask.id}
-          task={selectedTask}
-          onClose={() => setSelectedTask(null)}
-          onDelete={handleDeleteTask}
-          onUpdate={handleUpdateTask}
-        />
-      )}
     </div>
   );
 }
@@ -1197,7 +1224,7 @@ function App() {
             P
           </span>
           <h1 id="login-title">PlanRail</h1>
-          <p>予定とタスクをまとめて管理するスケジュール帳</p>
+          <p>予定に移動と準備をまとめるスケジュール帳</p>
           {authErrorMessage && (
             <p className="auth-error-message" role="alert">
               {authErrorMessage}

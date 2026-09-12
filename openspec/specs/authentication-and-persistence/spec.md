@@ -31,15 +31,21 @@ PlanRailの利用者認証、ユーザー別データ保存、およびFirestore
 
 ```text
 users/{uid}/events/{eventId}
-users/{uid}/tasks/{taskId}
 users/{uid}/preparations/{preparationId}
 users/{uid}/travelPlans/{eventId}
+users/{uid}/trips/{tripId}
+users/{uid}/travelBlocks/{travelBlockId}
 ```
 
 #### Scenario: スケジュールを読み込む
 
 - **WHEN** 認証済みユーザーのスケジュール画面を開始する
-- **THEN** システムはそのuid配下の予定、タスク、準備項目をFirestoreから読み込む
+- **THEN** システムはそのuid配下の予定、準備項目、Trip、移動ブロックと移行対象の旧移動予定をFirestoreから読み込む
+
+#### Scenario: 既存タスクがある
+
+- **WHEN** ユーザーの `tasks` collectionに旧バージョンのdocumentがある
+- **THEN** システムはそれを読み込まず、変更または削除しない
 
 #### Scenario: 別ユーザーのパスへアクセスする
 
@@ -48,7 +54,7 @@ users/{uid}/travelPlans/{eventId}
 
 ### Requirement: スケジュールデータはFirestoreへ直接保存する
 
-フロントエンドは予定、タスク、準備項目、移動予定のCRUDをCloud Firestoreへ直接行わなければならない（MUST）。FastAPIをこれらのCRUDの中継に使用してはならない。
+フロントエンドは予定、準備項目、Trip、移動ブロックのCRUDをCloud Firestoreへ直接行わなければならない（MUST）。FastAPIをこれらのCRUDの中継に使用してはならない。
 
 #### Scenario: 予定を作成する
 

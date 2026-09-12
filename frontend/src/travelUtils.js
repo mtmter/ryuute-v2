@@ -202,6 +202,8 @@ export function layoutCalendarItemsForDay(items, date) {
 
 export function visibleCalendarEvents(events) {
   return events.filter(
-    (event) => event.calendar_visibility !== "trip_overview_hidden",
+    (event) =>
+      event.calendar_visibility !== "trip_overview_hidden" &&
+      event.source_status !== "cancelled",
   );
 }

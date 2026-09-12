@@ -6,6 +6,7 @@ import {
   getDoc,
   getDocs,
   query,
+  runTransaction,
   setDoc,
   updateDoc,
   where,
@@ -16,6 +17,13 @@ import {
   legacyTravelPlanToTravelBlock,
   normalizePlace,
 } from "./travelUtils";
+import { SCHEDULE_COLLECTION_NAMES } from "./scheduleCollections";
+import {
+  chunkFirestoreWrites,
+  googleIntegrationPath,
+  sanitizeGoogleIntegration,
+  writableGoogleEventData,
+} from "./googleCalendarPersistence";
 
 export { legacyTravelPlanToTravelBlock } from "./travelUtils";
 
@@ -62,15 +70,12 @@ export async function migrateLegacyTravelPlans(
 }
 
 export async function loadScheduleData(uid) {
-  const [events, tasks, preparations, trips, travelBlocks, legacyTravelPlans] =
-    await Promise.all([
-      getCollectionData(uid, "events"),
-      getCollectionData(uid, "tasks"),
-      getCollectionData(uid, "preparations"),
-      getCollectionData(uid, "trips"),
-      getCollectionData(uid, "travelBlocks"),
-      getCollectionData(uid, "travelPlans"),
-    ]);
+  const [events, preparations, trips, travelBlocks, legacyTravelPlans] =
+    await Promise.all(
+      SCHEDULE_COLLECTION_NAMES.map((collectionName) =>
+        getCollectionData(uid, collectionName),
+      ),
+    );
   const migratedTravelBlocks = await migrateLegacyTravelPlans(
     uid,
     legacyTravelPlans,
@@ -79,10 +84,60 @@ export async function loadScheduleData(uid) {
   return {
     events,
     preparations,
-    tasks,
     trips,
     travelBlocks: [...travelBlocks, ...migratedTravelBlocks],
   };
+}
+
+export async function getGoogleCalendarIntegration(uid) {
+  const snapshot = await getDoc(doc(db, ...googleIntegrationPath(uid)));
+  return snapshot.exists()
+    ? sanitizeGoogleIntegration(snapshot.data())
+    : sanitizeGoogleIntegration();
+}
+
+export async function saveGoogleCalendarIntegration(uid, settings) {
+  const sanitized = sanitizeGoogleIntegration(settings);
+  await setDoc(doc(db, ...googleIntegrationPath(uid)), sanitized);
+  return sanitized;
+}
+
+export async function saveGoogleCalendarSyncState(uid, calendarId, state) {
+  const integrationDocument = doc(db, ...googleIntegrationPath(uid));
+  return runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(integrationDocument);
+    const current = snapshot.exists()
+      ? sanitizeGoogleIntegration(snapshot.data())
+      : sanitizeGoogleIntegration();
+    const next = sanitizeGoogleIntegration({
+      ...current,
+      sync_state: { ...current.sync_state, [calendarId]: state },
+    });
+    transaction.set(integrationDocument, next);
+    return next;
+  });
+}
+
+export async function listGoogleCalendarEventIds(uid, calendarId) {
+  const snapshot = await getDocs(
+    query(
+      userCollection(uid, "events"),
+      where("source", "==", "google_calendar"),
+      where("external.calendar_id", "==", calendarId),
+    ),
+  );
+  return snapshot.docs.map((item) => item.id);
+}
+
+export async function writeGoogleCalendarEvents(uid, events) {
+  for (const eventChunk of chunkFirestoreWrites(events)) {
+    const batch = writeBatch(db);
+    eventChunk.forEach((event) => {
+      const { id, ...documentData } = event;
+      batch.set(userDocument(uid, "events", id), documentData, { merge: true });
+    });
+    await batch.commit();
+  }
 }
 
 export async function createEvent(uid, eventData) {
@@ -137,18 +192,21 @@ export async function updateEvent(uid, eventId, eventData) {
   const eventDocument = userDocument(uid, "events", eventId);
   const previousSnapshot = await getDoc(eventDocument);
   const previousEvent = previousSnapshot.exists() ? previousSnapshot.data() : {};
+  const writableEventData = previousEvent.source === "google_calendar"
+    ? writableGoogleEventData(eventData)
+    : eventData;
   const routeFieldsChanged = EVENT_ROUTE_FIELDS.some(
-    (field) => previousEvent[field] !== eventData[field],
+    (field) => previousEvent[field] !== writableEventData[field],
   );
 
   if (!routeFieldsChanged) {
-    await updateDoc(eventDocument, eventData);
-    return { id: String(eventId), ...previousEvent, ...eventData };
+    await updateDoc(eventDocument, writableEventData);
+    return { id: String(eventId), ...previousEvent, ...writableEventData };
   }
 
   const linkedDocuments = await getEventTravelBlockDocuments(uid, eventId);
   const batch = writeBatch(db);
-  batch.update(eventDocument, eventData);
+  batch.update(eventDocument, writableEventData);
   linkedDocuments.forEach((snapshot) => {
     const reasons = new Set(snapshot.data().review_reasons ?? []);
     reasons.add("linked_event_changed");
@@ -158,7 +216,7 @@ export async function updateEvent(uid, eventId, eventData) {
     });
   });
   await batch.commit();
-  return { id: String(eventId), ...previousEvent, ...eventData };
+  return { id: String(eventId), ...previousEvent, ...writableEventData };
 }
 
 export async function deleteEvent(uid, eventId, travelBlockAction = "keep") {
@@ -202,24 +260,6 @@ export async function deleteEvent(uid, eventId, travelBlockAction = "keep") {
   }
   batch.delete(userDocument(uid, "events", eventId));
   await batch.commit();
-}
-
-export async function createTask(uid, taskData) {
-  const documentData = { ...taskData, completed: false };
-  const documentReference = await addDoc(
-    userCollection(uid, "tasks"),
-    documentData,
-  );
-  return { id: documentReference.id, ...documentData };
-}
-
-export async function updateTask(uid, taskId, taskData) {
-  await updateDoc(userDocument(uid, "tasks", taskId), taskData);
-  return { id: String(taskId), ...taskData };
-}
-
-export async function deleteTask(uid, taskId) {
-  await deleteDoc(userDocument(uid, "tasks", taskId));
 }
 
 export async function createPreparation(uid, ownerType, ownerId, title) {

@@ -1,6 +1,5 @@
 import {
   WEEKDAY_NAMES,
-  formatTime,
   getDateKey,
   isSameDay,
 } from "../dateUtils";
@@ -21,10 +20,8 @@ function formatMinutes(minutes) {
 function DayCalendar({
   events,
   travelBlocks,
-  tasks,
   selectedDate,
   onEventClick,
-  onTaskClick,
   onTravelBlockClick,
   onTimeClick,
 }) {
@@ -37,15 +34,6 @@ function DayCalendar({
     ],
     selectedDate,
   );
-  const dateTasks = tasks
-    .filter(
-      (task) =>
-        !task.completed &&
-        task.due_at?.slice(0, 10) === getDateKey(selectedDate),
-    )
-    .sort((firstTask, secondTask) =>
-      firstTask.due_at.localeCompare(secondTask.due_at),
-    );
 
   return (
     <section aria-label="日間カレンダー">
@@ -71,33 +59,6 @@ function DayCalendar({
               >
                 {selectedDate.getDate()}
               </time>
-            </div>
-          </div>
-
-          <div className="week-due-row day-due-row">
-            <div aria-hidden="true" />
-            <div className="week-due-cell">
-              {dateTasks.map((task) => (
-                <div
-                  className="week-task"
-                  title={task.title}
-                  key={task.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => onTaskClick(task)}
-                  onKeyDown={(keyEvent) => {
-                    if (
-                      keyEvent.key === "Enter" ||
-                      keyEvent.key === " "
-                    ) {
-                      keyEvent.preventDefault();
-                      onTaskClick(task);
-                    }
-                  }}
-                >
-                  {formatTime(task.due_at)} {task.title}
-                </div>
-              ))}
             </div>
           </div>
 
@@ -168,7 +129,7 @@ function DayCalendar({
                         }
                       }}
                     >
-                      <strong>{item.calendar_kind === "travel" ? `⇢ ${item.title}` : item.title}</strong>
+                      <strong>{item.calendar_kind === "travel" ? `⇢ ${item.title}` : `${item.source === "google_calendar" ? "G " : ""}${item.title}`}</strong>
                       <span>
                         {formatMinutes(position.startMinutes)}–
                         {formatMinutes(

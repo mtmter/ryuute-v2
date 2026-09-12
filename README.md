@@ -7,8 +7,7 @@ Googleアカウントでログインすると、ユーザーごとのデータ�
 ## 主な機能
 
 - 月・週・日のカレンダー表示
-- 予定とタスクの追加・編集・削除
-- タスクの完了・未完了管理
+- 予定の追加・編集・削除
 - Google Placesによる場所候補と、候補を利用できない場合の文字入力
 - Google Mapsへの場所リンク
 - Mockまたは駅すぱあとProviderを使った公共交通経路検索
@@ -27,7 +26,7 @@ Googleアカウントでログインすると、ユーザーごとのデータ�
 | `openspec/` | 実装済みのプロダクト仕様と、今後の変更管理 |
 | `docs/` | アーキテクチャ、外部Provider、デプロイなどの技術資料 |
 
-予定、タスク、準備項目、Trip、移動ブロックの読み書きはフロントエンドからFirestoreへ直接行います。FastAPIが提供するアプリ用APIは、ヘルスチェックと経路検索の2つです。
+予定、準備項目、Trip、移動ブロックの読み書きはフロントエンドからFirestoreへ直接行います。FastAPIが提供するアプリ用APIは、ヘルスチェックと経路検索の2つです。旧バージョンで保存したtask documentは削除せず保持しますが、現在のアプリは読み込み・表示・更新を行いません。
 
 詳しくは次を参照してください。
 
@@ -53,7 +52,8 @@ Googleアカウントでログインすると、ユーザーごとのデータ�
 - Python 3
 - GoogleログインとCloud Firestoreを利用できるFirebaseプロジェクト
 - 場所候補を利用する場合は、Maps JavaScript APIとPlaces APIを利用できるブラウザ用APIキー
-- `ROUTE_PROVIDER=ekispert` を利用する場合は駅すぱあとAPIキー
+- Google Routesを利用する場合はサーバー用APIキー
+- `ROUTE_PROVIDER_MODE=ekispert` を利用する場合は駅すぱあとAPIキー
 
 Node.jsとPythonの対応バージョンは現在リポジトリで固定されていません。依存関係は `frontend/package-lock.json` と `backend/requirements.txt` で管理されています。
 
@@ -69,6 +69,7 @@ cp .env.example .env.local
 
 ```text
 VITE_GOOGLE_MAPS_API_KEY=
+VITE_GOOGLE_OAUTH_CLIENT_ID=
 VITE_FIREBASE_API_KEY=
 VITE_FIREBASE_AUTH_DOMAIN=
 VITE_FIREBASE_PROJECT_ID=
@@ -79,6 +80,8 @@ VITE_BACKEND_API_BASE_URL=http://localhost:8000/api
 ```
 
 `VITE_GOOGLE_MAPS_API_KEY` が未設定、またはPlacesを読み込めない場合も、場所は文字列として入力できます。FirestoreのCRUDにはバックエンドURLを使用しません。
+
+Google Calendar を読み取り専用で連携する場合は、Google Cloud Console で Google Calendar API を有効化し、OAuth 同意画面に `calendar.readonly` スコープを追加してください。ウェブ アプリケーション用 OAuth クライアントの「承認済みの JavaScript 生成元」に開発・本番のフロントエンド origin（例: `http://localhost:5173`）を登録し、そのクライアント ID を `VITE_GOOGLE_OAUTH_CLIENT_ID` に設定します。アクセストークンはブラウザのメモリだけで扱い、Firestore や Local Storage には保存しません。
 
 ## バックエンドの設定
 
@@ -140,7 +143,7 @@ npm run lint
 npm run build
 ```
 
-`npm test` は旅程警告、カレンダー重複配置、日付またぎ、旧移動予定変換の純粋関数テストを実行します。
+`npm test` は旅程警告、カレンダー重複配置、日付またぎ、旧移動予定変換、カレンダーと追加フォームのcomponent testを実行します。
 
 ## 仕様変更
 

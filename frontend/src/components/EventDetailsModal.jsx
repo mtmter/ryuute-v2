@@ -108,6 +108,7 @@ function EventDetailsModal({
   const [routeDirection, setRouteDirection] = useState("inbound");
   const [deleteTravelAction, setDeleteTravelAction] = useState("keep");
   const [tripId, setTripId] = useState(event.trip_id ?? "");
+  const isGoogleEvent = event.source === "google_calendar";
 
   const isBusy = isSubmitting || isRouteSearching;
   const googleMapsUrl = createGoogleMapsUrl(event);
@@ -316,6 +317,7 @@ function EventDetailsModal({
                 value={title}
                 autoFocus
                 required
+                readOnly={isGoogleEvent}
                 onChange={(inputEvent) => setTitle(inputEvent.target.value)}
               />
             </div>
@@ -333,6 +335,7 @@ function EventDetailsModal({
                 id="edit-event-start-at"
                 label="開始日時"
                 value={startAt}
+                disabled={isGoogleEvent}
                 onChange={setStartAt}
               />
               <DateTimePicker
@@ -340,6 +343,7 @@ function EventDetailsModal({
                 label="終了日時"
                 value={endAt}
                 min={startAt}
+                disabled={isGoogleEvent}
                 onChange={setEndAt}
               />
             </div>
@@ -351,6 +355,7 @@ function EventDetailsModal({
               <textarea
                 id="edit-event-description"
                 value={description}
+                readOnly={isGoogleEvent}
                 onChange={(inputEvent) =>
                   setDescription(inputEvent.target.value)
                 }
@@ -361,23 +366,27 @@ function EventDetailsModal({
               <label htmlFor="edit-event-location-name">
                 場所名 <span>任意</span>
               </label>
-              <PlaceAutocompleteInput
-                id="edit-event-location-name"
-                value={locationName}
-                placeholder="例：Garraway F"
-                disabled={isBusy}
-                onChange={(nextLocationName) => {
-                  setLocationName(nextLocationName);
-                  setSelectedPlace(null);
-                }}
-                onPlaceSelect={(place) => {
-                  setSelectedPlace(place);
-                  if (place) {
-                    setLocationName(place.name);
-                    setDestination(place.address);
-                  }
-                }}
-              />
+              {isGoogleEvent ? (
+                <input id="edit-event-location-name" value={locationName} readOnly />
+              ) : (
+                <PlaceAutocompleteInput
+                  id="edit-event-location-name"
+                  value={locationName}
+                  placeholder="例：Garraway F"
+                  disabled={isBusy}
+                  onChange={(nextLocationName) => {
+                    setLocationName(nextLocationName);
+                    setSelectedPlace(null);
+                  }}
+                  onPlaceSelect={(place) => {
+                    setSelectedPlace(place);
+                    if (place) {
+                      setLocationName(place.name);
+                      setDestination(place.address);
+                    }
+                  }}
+                />
+              )}
             </div>
 
             <div className="modal-form-field">
@@ -477,6 +486,14 @@ function EventDetailsModal({
           </div>
         ) : (
           <div className="event-details-content">
+            {isGoogleEvent && (
+              <p className="google-event-source">
+                Google Calendarから同期
+                {event.external?.html_link && (
+                  <> · <a href={event.external.html_link} target="_blank" rel="noopener noreferrer">元の予定を開く</a></>
+                )}
+              </p>
+            )}
             <dl className="event-detail-list">
               <div>
                 <dt>開始日時</dt>
@@ -559,7 +576,7 @@ function EventDetailsModal({
 
             <div className="modal-actions event-details-actions">
               {(event.source_type === "google" || event.source?.type === "google") && !event.trip_id && <button className="secondary-button" type="button" onClick={() => onCreateTripFromEvent(event)}>Tripにする</button>}
-              <button
+              {!isGoogleEvent && <button
                 className="danger-secondary-button"
                 type="button"
                 onClick={() => {
@@ -568,7 +585,7 @@ function EventDetailsModal({
                 }}
               >
                 削除
-              </button>
+              </button>}
               <button
                 className="primary-button"
                 type="button"

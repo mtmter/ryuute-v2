@@ -10,7 +10,6 @@ function AddItemModal({ initialValues, onClose, onSubmit, trips = [] }) {
     initialValues.eventStartAt,
   );
   const [eventEndAt, setEventEndAt] = useState(initialValues.eventEndAt);
-  const [taskDueAt, setTaskDueAt] = useState(initialValues.taskDueAt);
   const [description, setDescription] = useState("");
   const [locationName, setLocationName] = useState("");
   const [destination, setDestination] = useState("");
@@ -120,12 +119,6 @@ function AddItemModal({ initialValues, onClose, onSubmit, trips = [] }) {
           start_at: eventStartAt || null,
           end_at: eventEndAt || null,
         });
-      } else {
-        await onSubmit("task", {
-          title: title.trim(),
-          due_at: taskDueAt || null,
-          description,
-        });
       }
     } catch (error) {
       setErrorMessage(error.message);
@@ -175,7 +168,7 @@ function AddItemModal({ initialValues, onClose, onSubmit, trips = [] }) {
                   ? "移動を追加"
                   : itemType === "trip"
                     ? "Tripを追加"
-                    : "タスクを追加"}
+                    : "項目を追加"}
             </h2>
           </div>
           <button
@@ -220,16 +213,6 @@ function AddItemModal({ initialValues, onClose, onSubmit, trips = [] }) {
           >
             Trip
           </button>
-          <button
-            className={itemType === "task" ? "is-active" : ""}
-            type="button"
-            onClick={() => {
-              setItemType("task");
-              setErrorMessage("");
-            }}
-          >
-            タスク
-          </button>
         </div>
 
         <form className="add-item-form" onSubmit={handleSubmit}>
@@ -241,7 +224,7 @@ function AddItemModal({ initialValues, onClose, onSubmit, trips = [] }) {
                   ? "便名・移動タイトル"
                   : itemType === "trip"
                     ? "Tripタイトル"
-                    : "タスクタイトル"}
+                    : "タイトル"}
             </label>
             <input
               id="item-title"
@@ -254,7 +237,7 @@ function AddItemModal({ initialValues, onClose, onSubmit, trips = [] }) {
                     ? "例：東京行き夜行バス"
                     : itemType === "trip"
                       ? "例：京都旅行"
-                      : "例：資料を作る"
+                      : "タイトル"
               }
               autoFocus
               required
@@ -390,16 +373,7 @@ function AddItemModal({ initialValues, onClose, onSubmit, trips = [] }) {
               <DateTimePicker id="trip-start-at" label="開始日時" optional value={eventStartAt} onChange={handleEventStartChange} />
               <DateTimePicker id="trip-end-at" label="終了日時" optional value={eventEndAt} min={eventStartAt} onChange={setEventEndAt} />
             </div>
-          ) : (
-            <DateTimePicker
-              defaultTime="23:45"
-              id="task-due-at"
-              label="期限"
-              optional
-              value={taskDueAt}
-              onChange={setTaskDueAt}
-            />
-          )}
+          ) : null}
 
           <div className="modal-form-field">
             <label htmlFor="item-description">

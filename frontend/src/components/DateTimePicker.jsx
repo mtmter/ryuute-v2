@@ -38,6 +38,7 @@ function normalizeTimeInput(inputValue) {
 
 function DateTimePicker({
   defaultTime = "09:00",
+  disabled = false,
   id,
   label,
   min,
@@ -145,6 +146,7 @@ function DateTimePicker({
               className="date-picker-button"
               id={`${id}-date`}
               type="button"
+              disabled={disabled}
               aria-expanded={isCalendarOpen}
               aria-haspopup="dialog"
               onClick={openCalendar}
@@ -238,6 +240,7 @@ function DateTimePicker({
               className="time-picker-input"
               id={`${id}-time`}
               type="text"
+              disabled={disabled}
               role="combobox"
               aria-autocomplete="none"
               aria-controls={`${id}-time-options`}
@@ -264,6 +267,7 @@ function DateTimePicker({
             <button
               className="time-picker-toggle"
               type="button"
+              disabled={disabled}
               aria-label={`${label}の時刻候補を表示`}
               onClick={() => {
                 setIsCalendarOpen(false);

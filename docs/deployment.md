@@ -122,6 +122,10 @@ GET https://<backend-domain>/api/health
 
 フロントエンドでは、Googleログイン、Firestoreの読み書き、場所入力、経路検索、移動予定登録を実環境で確認します。
 
+経路Providerを変更した場合は `provider`、`route_kind`、`is_fallback`、`notices` が
+レスポンスと保存済み移動ブロックへ残ることを確認します。障害時のrollbackは
+`ROUTE_PROVIDER_MODE=mock` へ変更して再デプロイし、healthとroute-searchを再確認します。
+
 ## 未確認事項
 
 環境変数の実値、Firebase AuthenticationのAuthorized domains、Google Maps APIキーのHTTPリファラ制限、デプロイ済みFirestore Security Rulesの版は今回取得していません。これらは各サービスの管理画面で確認する必要があります。

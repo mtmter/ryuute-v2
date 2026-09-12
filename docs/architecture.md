@@ -9,7 +9,7 @@ Browser / React
   |
   +-- Firebase Authentication -- Google login
   |
-  +-- Cloud Firestore --------- events, tasks, preparations, trips,
+  +-- Cloud Firestore --------- events, preparations, trips,
   |                             travelBlocks, legacy travelPlans
   |
   +-- Google Maps JavaScript API / Places
@@ -34,7 +34,7 @@ Browser / React
 - `src/components/`: カレンダー、モーダル、経路、準備案内などのUI
 - `src/dateUtils.js`: ローカル日時文字列とカレンダー表示用の日時計算
 
-予定、タスク、準備項目、Trip、移動ブロックはログイン後にまとめて読み込みます。移動ブロックは予定と同じ開始・終了日時を持ち、月・週・日のカレンダーへ表示します。`travelPlans/{eventId}` の旧データは `travelBlocks/legacy-{eventId}` へ冪等に変換しますが、移行確認期間中は旧ドキュメントも保持します。
+予定、準備項目、Trip、移動ブロックはログイン後にまとめて読み込みます。移動ブロックは予定と同じ開始・終了日時を持ち、月・週・日のカレンダーへ表示します。`travelPlans/{eventId}` の旧データは `travelBlocks/legacy-{eventId}` へ冪等に変換しますが、移行確認期間中は旧ドキュメントも保持します。旧バージョンの `tasks` collectionは読み込まず、移行・更新・削除もしません。
 
 主なFirestoreデータの関係は次のとおりです。
 

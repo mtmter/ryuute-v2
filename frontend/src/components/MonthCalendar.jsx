@@ -18,11 +18,9 @@ const VISIBLE_ITEMS_WITH_SUMMARY_IN_SIX_WEEK_MONTH = 2;
 function MonthCalendar({
   events,
   travelBlocks,
-  tasks,
   selectedDate,
   onDateClick,
   onEventClick,
-  onTaskClick,
   onTravelBlockClick,
 }) {
   const calendarDates = getMonthDates(selectedDate);
@@ -78,15 +76,6 @@ function MonthCalendar({
                     secondEvent.start_at ?? "",
                   ),
                 );
-              const dateTasks = tasks
-                .filter(
-                  (task) =>
-                    !task.completed &&
-                    task.due_at?.slice(0, 10) === getDateKey(date),
-                )
-                .sort((firstTask, secondTask) =>
-                  firstTask.due_at.localeCompare(secondTask.due_at),
-                );
               const dateTravelBlocks = travelBlocks
                 .filter((block) => eventOccursOnDate(block, date))
                 .sort((first, second) =>
@@ -98,8 +87,7 @@ function MonthCalendar({
               const visibleItemsWithSummary = hasSixWeeks
                 ? VISIBLE_ITEMS_WITH_SUMMARY_IN_SIX_WEEK_MONTH
                 : VISIBLE_ITEMS_WITH_SUMMARY_IN_FIVE_WEEK_MONTH;
-              const totalItemCount =
-                dateEvents.length + dateTravelBlocks.length + dateTasks.length;
+              const totalItemCount = dateEvents.length + dateTravelBlocks.length;
               const visibleItemCount =
                 totalItemCount > maxItemsWithoutSummary
                   ? visibleItemsWithSummary
@@ -113,18 +101,10 @@ function MonthCalendar({
                 0,
                 visibleTravelCount,
               );
-              const visibleTaskCount = Math.max(
-                visibleItemCount -
-                  visibleEvents.length -
-                  visibleTravelBlocks.length,
-                0,
-              );
-              const visibleTasks = dateTasks.slice(0, visibleTaskCount);
               const hiddenItemCount =
                 totalItemCount -
                 visibleEvents.length -
-                visibleTravelBlocks.length -
-                visibleTasks.length;
+                visibleTravelBlocks.length;
               const isOutsideMonth =
                 date.getMonth() !== selectedDate.getMonth();
 
@@ -188,7 +168,7 @@ function MonthCalendar({
                               {formatTime(event.start_at)}
                             </span>
                           )}
-                          <span>{event.title}</span>
+                          <span>{event.source === "google_calendar" ? "G " : ""}{event.title}</span>
                         </div>
                       );
                     })}
@@ -221,48 +201,17 @@ function MonthCalendar({
                       </div>
                     })}
 
-                    {visibleTasks.map((task) => (
-                      <div
-                        className="month-task"
-                        title={`タスク: ${task.title}`}
-                        key={`task-${task.id}`}
-                        role="button"
-                        tabIndex={0}
-                        onClick={(clickEvent) => {
-                          clickEvent.stopPropagation();
-                          onTaskClick(task);
-                        }}
-                        onKeyDown={(keyEvent) => {
-                          if (
-                            keyEvent.key === "Enter" ||
-                            keyEvent.key === " "
-                          ) {
-                            keyEvent.preventDefault();
-                            keyEvent.stopPropagation();
-                            onTaskClick(task);
-                          }
-                        }}
-                      >
-                        <span className="task-dot" aria-hidden="true" />
-                        <span className="month-item-time">
-                          {formatTime(task.due_at)}
-                        </span>
-                        <span>{task.title}</span>
-                      </div>
-                    ))}
-
                     {hiddenItemCount > 0 && (
                       <button
                         type="button"
                         className="month-more-events"
-                        title={`他${hiddenItemCount}件の予定・移動・タスクを表示`}
+                        title={`他${hiddenItemCount}件の予定・移動を表示`}
                         onClick={(clickEvent) => {
                           clickEvent.stopPropagation();
                           setDayItemsPopup({
                             date,
                             events: dateEvents,
                             travelBlocks: dateTravelBlocks,
-                            tasks: dateTasks,
                           });
                         }}
                         onKeyDown={(keyEvent) => keyEvent.stopPropagation()}
@@ -303,7 +252,7 @@ function MonthCalendar({
               </div>
               <button
                 autoFocus
-                aria-label="予定とタスクの一覧を閉じる"
+                aria-label="予定と移動の一覧を閉じる"
                 className="modal-close-button"
                 type="button"
                 onClick={() => setDayItemsPopup(null)}
@@ -356,24 +305,6 @@ function MonthCalendar({
                 </button>
               ))}
 
-              {dayItemsPopup.tasks.map((task) => (
-                <button
-                  type="button"
-                  className="month-events-popover-task"
-                  key={`popup-task-${task.id}`}
-                  title={`タスク: ${task.title}`}
-                  onClick={() => {
-                    setDayItemsPopup(null);
-                    onTaskClick(task);
-                  }}
-                >
-                  <span className="task-dot" aria-hidden="true" />
-                  <span className="month-item-time">
-                    {formatTime(task.due_at)}
-                  </span>
-                  <span>{task.title}</span>
-                </button>
-              ))}
             </div>
           </section>
         </div>
